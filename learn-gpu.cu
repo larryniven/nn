@@ -1,9 +1,14 @@
+#include <fstream>
+#include <algorithm>
+#include "ebt/ebt.h"
 #include "autodiff/autodiff.h"
 #include "la/la.h"
 #include "opt/opt.h"
-#include <fstream>
-#include <algorithm>
 #include "nn/nn.h"
+
+#include "la/la-gpu.h"
+#include "autodiff/autodiff-gpu.h"
+#include "nn/nn-gpu.h"
 
 struct learning_env {
     std::ifstream input_list;
@@ -11,8 +16,8 @@ struct learning_env {
     std::unordered_map<std::string, int> label_id;
     std::vector<std::string> labels;
 
-    nn::param_t param;
-    nn::opt_t opt_data;
+    nn::gpu::param_t param;
+    nn::gpu::opt_t opt_data;
 
     double step_size;
 
@@ -62,8 +67,8 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
 
     std::tie(label_id, labels) = nn::load_label_map(args.at("label"));
 
-    param = nn::load_param(args.at("param"));
-    opt_data = nn::load_opt(args.at("opt-data"));
+    param = nn::gpu::param_t(nn::load_param(args.at("param")));
+    opt_data = nn::gpu::opt_t(nn::load_opt(args.at("opt-data")));
 
     step_size = std::stod(args.at("step-size"));
 
@@ -76,7 +81,8 @@ void learning_env::run()
     std::string line;
 
     int sample = 0;
-    double accu_loss = 0;
+    double loss_mean = 0;
+    double loss_var = 0;
     while (std::getline(input_list, line)) {
         std::vector<std::string> parts = ebt::split(line);
 
@@ -84,6 +90,10 @@ void learning_env::run()
         input.resize(parts.size() - 1);
         std::transform(parts.begin() + 1, parts.end(), input.begin(),
             [](std::string const& s) { return std::stod(s); });
+        // auto o = input.begin();
+        // for (auto i = parts.begin() + 1; i != parts.end(); ++i, ++o) {
+        //     *o = std::stod(*i);
+        // }
 
         std::string label = parts.front();
 
@@ -91,12 +101,15 @@ void learning_env::run()
         gold.resize(label_id.size());
         gold(label_id[label]) = 1;
 
-        nn::nn_t nn = nn::make_nn(param);
-        nn.hidden[0]->output = std::make_shared<la::vector<double>>(la::vector<double>(input));
-        autodiff::eval(nn.output, autodiff::eval_funcs);
-        nn::log_loss loss { autodiff::get_output<la::vector<double>>(nn.output), gold };
+        nn::nn_t nn = nn::gpu::make_nn(param);
+        nn.hidden[0]->output = std::make_shared<la::gpu::vector<double>>(
+            la::gpu::vector<double>(la::vector<double>(input)));
+        autodiff::eval(nn.output, autodiff::gpu::eval_funcs);
+        nn::gpu::log_loss loss { autodiff::get_output<la::gpu::vector<double>>(nn.output),
+            la::gpu::vector<double>(gold) };
 
-        accu_loss += loss.loss();
+        loss_mean += loss.loss();
+        loss_var += std::pow(loss.loss(), 2);
 
 #if DEBUG
         {
@@ -106,35 +119,40 @@ void learning_env::run()
 
             nn::nn_t nn = nn::make_nn(param);
 
-            nn.hidden[0]->output = std::make_shared<la::vector<double>>(la::vector<double>(input));
-            autodiff::eval(nn.output, autodiff::eval_funcs);
-            nn::log_loss loss2 { autodiff::get_output<la::vector<double>>(nn.output), gold };
+            nn.hidden[0]->output = std::make_shared<la::gpu::vector<double>>(
+                la::gpu::vector<double>(la::vector<double>(input)));
+            autodiff::eval(nn.output, autodiff::gpu::eval_funcs);
+            nn::gpu::log_loss loss2 { autodiff::get_output<la::gpu::vector<double>>(nn.output), gold };
 
             std::cout << "numerical grad: " << (loss2.loss() - loss.loss()) / 1e-8 << std::endl;
             tmp = backup;
         }
 #endif
 
-        nn.output->grad = std::make_shared<la::vector<double>>(loss.grad());
-        autodiff::grad(nn.output, autodiff::grad_funcs);
+        nn.output->grad = std::make_shared<la::gpu::vector<double>>(
+            la::gpu::vector<double>(loss.grad()));
+        autodiff::grad(nn.output, autodiff::gpu::grad_funcs);
 
 #if DEBUG
-        std::cout << "calc grad: " << autodiff::get_grad<la::matrix<double>>(nn.weight[0])(0, 0) << std::endl;
+        std::cout << "calc grad: "
+            << to_host(autodiff::get_grad<la::gpu::matrix<double>>(nn.weight[0]))(0, 0)
+            << std::endl;
 #endif
 
-        nn::param_t grad = nn::copy_grad(nn);
+        nn::gpu::param_t grad = nn::gpu::copy_grad(nn);
 
-        nn::adagrad_update(param, grad, opt_data, step_size);
+        nn::gpu::adagrad_update(param, grad, opt_data, step_size);
 
         if (sample % 100 == 0) {
-            std::cout << "last 100 avg loss: " << accu_loss / 100 << std::endl;
-            accu_loss = 0;
+            std::cout << "last 100 avg loss: " << loss_mean / 100
+                << " var: " << loss_var / 100 - std::pow(loss_mean / 100, 2) << std::endl;
+            loss_mean = 0;
+            loss_var = 0;
         }
 
         ++sample;
     }
 
-    save_param(param, output_param);
-    save_opt(opt_data, output_opt_data);
+    save_param(nn::gpu::to_host(param), output_param);
+    save_opt(nn::gpu::to_host(opt_data), output_opt_data);
 }
-
