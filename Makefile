@@ -1,21 +1,27 @@
-CXXFLAGS += -std=c++11 -I ../ -L ../ebt -L ../la -L ../autodiff -L ../opt
+CXXFLAGS += -std=c++11 -I ../ -L ../ebt -L ../la -L ../autodiff -L ../opt -L ../speech
 AR = gcc-ar
 
 .PHONY: all clean gpu
 
-all: learn predict libnn.a
+all: learn predict learn-rnn predict-rnn libnn.a
 
 gpu: learn-gpu libnngpu.a
 
 clean:
 	-rm *.o
-	-rm learn predict learn-gpu
+	-rm learn predict learn-rnn predict-rnn learn-gpu
 
 learn: nn.o learn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lopt -lla -lebt -lblas
 
 predict: nn.o predict.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lopt -lla -lebt -lblas
+
+learn-rnn: rnn.o learn-rnn.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+predict-rnn: rnn.o predict-rnn.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 libnn.a: nn.o
 	$(AR) rcs $@ $^
@@ -36,3 +42,4 @@ learn-gpu: learn-gpu.o nn-gpu.o nn.o
 
 nn-gpu.o: nn-gpu.h nn.h
 learn-gpu.o: nn-gpu.h
+rnn.o: rnn.h

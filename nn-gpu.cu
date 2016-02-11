@@ -69,6 +69,18 @@ namespace nn {
             p.label_bias.resize(q.label_bias.size());
         }
 
+        void zero_param(param_t& p)
+        {
+            for (int i = 0; i < p.weight.size(); ++i) {
+                cudaMemset(p.weight[i].data(), 0,
+                    p.weight[i].rows() * p.weight[i].cols() * sizeof(double));
+                cudaMemset(p.bias[i].data(), 0, p.bias[i].size() * sizeof(double));
+            }
+            cudaMemset(p.label_weight.data(), 0,
+                p.label_weight.rows() * p.label_weight.cols() * sizeof(double));
+            cudaMemset(p.label_bias.data(), 0, p.label_bias.size() * sizeof(double));
+        }
+
         opt_t::opt_t()
         {}
 
@@ -101,7 +113,7 @@ namespace nn {
                 nn.weight.push_back(w_var);
                 nn.bias.push_back(b_var);
                 nn.hidden.push_back(autodiff::relu(
-                    autodiff::add(autodiff::mult(w_var, nn.hidden.back()), b_var)
+                    autodiff::add(autodiff::mul(w_var, nn.hidden.back()), b_var)
                 ));
             }
 
@@ -109,7 +121,7 @@ namespace nn {
             nn.label_bias = nn.graph.var(la::gpu::vector<double>(p.label_bias));
 
             nn.output = autodiff::logsoftmax(autodiff::add(
-                autodiff::mult(nn.label_weight, nn.hidden.back()), nn.label_bias));
+                autodiff::mul(nn.label_weight, nn.hidden.back()), nn.label_bias));
 
             return nn;
         }
@@ -126,7 +138,7 @@ namespace nn {
                 nn.weight.push_back(w_var);
                 nn.bias.push_back(b_var);
                 nn.hidden.push_back(autodiff::relu(
-                    autodiff::add(autodiff::mult(w_var, nn.hidden.back()), b_var)
+                    autodiff::add(autodiff::mul(w_var, nn.hidden.back()), b_var)
                 ));
             }
 
@@ -136,7 +148,7 @@ namespace nn {
             std::vector<std::shared_ptr<autodiff::op_t>> hiddens {nn.hidden.begin() + 1, nn.hidden.end()};
 
             nn.output = autodiff::logsoftmax(autodiff::add(
-                autodiff::mult(nn.label_weight, autodiff::add(hiddens)), nn.label_bias));
+                autodiff::mul(nn.label_weight, autodiff::add(hiddens)), nn.label_bias));
 
             return nn;
         }
@@ -178,6 +190,36 @@ namespace nn {
                 1 + opt_data.time / 1.0e6, step_size, 0.9, 0.999);
         }
 
+        void move_param(param_t& result, nn_t& nn)
+        {
+            for (int i = 0; i < nn.weight.size(); ++i) {
+                result.weight[i] = std::move(
+                    autodiff::get_output<la::gpu::matrix<double>>(nn.weight[i]));
+                result.bias[i] = std::move(
+                    autodiff::get_output<la::gpu::vector<double>>(nn.bias[i]));
+            }
+    
+            result.label_weight = std::move(
+                autodiff::get_output<la::gpu::matrix<double>>(nn.label_weight));
+            result.label_bias = std::move(
+                autodiff::get_output<la::gpu::vector<double>>(nn.label_bias));
+        }
+
+        void move_param(nn_t& nn, param_t& p)
+        {
+            for (int i = 0; i < p.weight.size(); ++i) {
+                autodiff::get_output<la::gpu::matrix<double>>(nn.weight[i])
+                    = std::move(p.weight[i]);
+                autodiff::get_output<la::gpu::vector<double>>(nn.bias[i])
+                    = std::move(p.bias[i]);
+            }
+    
+            autodiff::get_output<la::gpu::matrix<double>>(nn.label_weight)
+                = std::move(p.label_weight);
+            autodiff::get_output<la::gpu::vector<double>>(nn.label_bias)
+                = std::move(p.label_bias);
+        }
+
         param_t copy_grad(nn_t const& nn)
         {
             param_t result;
@@ -193,6 +235,71 @@ namespace nn {
             return result;
         }
 
+        void move_grad(param_t& result, nn_t const& nn)
+        {
+            for (int i = 0; i < nn.weight.size(); ++i) {
+                result.weight[i] = std::move(
+                    autodiff::get_grad<la::gpu::matrix<double>>(nn.weight[i]));
+                result.bias[i] = std::move(
+                    autodiff::get_grad<la::gpu::vector<double>>(nn.bias[i]));
+            }
+    
+            result.label_weight = std::move(
+                autodiff::get_grad<la::gpu::matrix<double>>(nn.label_weight));
+            result.label_bias = std::move(
+                autodiff::get_grad<la::gpu::vector<double>>(nn.label_bias));
+        }
+
+        void move_grad(nn_t& nn, param_t& p)
+        {
+            for (int i = 0; i < p.weight.size(); ++i) {
+                autodiff::get_grad<la::gpu::matrix<double>>(nn.weight[i])
+                    = std::move(p.weight[i]);
+                autodiff::get_grad<la::gpu::vector<double>>(nn.bias[i])
+                    = std::move(p.bias[i]);
+            }
+    
+            autodiff::get_grad<la::gpu::matrix<double>>(nn.label_weight)
+                = std::move(p.label_weight);
+            autodiff::get_grad<la::gpu::vector<double>>(nn.label_bias)
+                = std::move(p.label_bias);
+        }
+
+        void zero_grad(nn_t& nn)
+        {
+            la::gpu::zero(autodiff::get_grad<la::gpu::vector<double>>(nn.hidden.front()));
+
+            for (int i = 1; i < nn.hidden.size(); ++i) {
+                la::gpu::zero(autodiff::get_grad<la::gpu::vector<double>>(nn.hidden[i]));
+
+                auto add = autodiff::get_child(nn.hidden[i], 0);
+                la::gpu::zero(autodiff::get_grad<la::gpu::vector<double>>(add));
+
+                auto mul = autodiff::get_child(add, 0);
+                la::gpu::zero(autodiff::get_grad<la::gpu::vector<double>>(mul));
+
+                auto bias = autodiff::get_child(add, 1);
+                la::gpu::zero(autodiff::get_grad<la::gpu::vector<double>>(bias));
+
+                auto weight = autodiff::get_child(mul, 0);
+                la::gpu::zero(autodiff::get_grad<la::gpu::matrix<double>>(weight));
+            }
+
+            la::gpu::zero(autodiff::get_grad<la::gpu::vector<double>>(nn.output));
+
+            auto add = autodiff::get_child(nn.output, 0);
+            la::gpu::zero(autodiff::get_grad<la::gpu::vector<double>>(add));
+
+            auto mul = autodiff::get_child(add, 0);
+            la::gpu::zero(autodiff::get_grad<la::gpu::vector<double>>(mul));
+
+            auto label_bias = autodiff::get_child(add, 1);
+            la::gpu::zero(autodiff::get_grad<la::gpu::vector<double>>(label_bias));
+
+            auto label_weight = autodiff::get_child(mul, 0);
+            la::gpu::zero(autodiff::get_grad<la::gpu::matrix<double>>(label_weight));
+        }
+
         log_loss::log_loss(
             la::gpu::vector<double> const& pred, la::gpu::vector<double> const& gold)
             : pred(pred), gold(gold)
@@ -205,7 +312,7 @@ namespace nn {
         
         la::gpu::vector<double> log_loss::grad()
         {
-            return la::gpu::mult(gold, -1);
+            return la::gpu::mul(gold, -1);
         }
     }
 }

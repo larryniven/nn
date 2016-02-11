@@ -156,7 +156,7 @@ namespace nn {
             nn.weight.push_back(w_var);
             nn.bias.push_back(b_var);
             nn.hidden.push_back(autodiff::relu(
-                autodiff::add(autodiff::mult(w_var, nn.hidden.back()), b_var)
+                autodiff::add(autodiff::mul(w_var, nn.hidden.back()), b_var)
             ));
         }
 
@@ -164,7 +164,7 @@ namespace nn {
         nn.label_bias = nn.graph.var(p.label_bias);
 
         nn.output = autodiff::logsoftmax(autodiff::add(
-            autodiff::mult(nn.label_weight, nn.hidden.back()), nn.label_bias));
+            autodiff::mul(nn.label_weight, nn.hidden.back()), nn.label_bias));
 
         return nn;
     }
@@ -181,7 +181,7 @@ namespace nn {
             nn.weight.push_back(w_var);
             nn.bias.push_back(b_var);
             nn.hidden.push_back(autodiff::relu(
-                autodiff::add(autodiff::mult(w_var, nn.hidden.back()), b_var)
+                autodiff::add(autodiff::mul(w_var, nn.hidden.back()), b_var)
             ));
         }
 
@@ -191,7 +191,7 @@ namespace nn {
         std::vector<std::shared_ptr<autodiff::op_t>> hiddens {nn.hidden.begin() + 1, nn.hidden.end()};
 
         nn.output = autodiff::logsoftmax(autodiff::add(
-            autodiff::mult(nn.label_weight, autodiff::add(hiddens)), nn.label_bias));
+            autodiff::mul(nn.label_weight, autodiff::add(hiddens)), nn.label_bias));
 
         return nn;
     }
@@ -257,7 +257,7 @@ namespace nn {
     
     la::vector<double> log_loss::grad()
     {
-        return la::mult(gold, -1);
+        return la::mul(gold, -1);
     }
 }
 

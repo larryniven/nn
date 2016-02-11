@@ -23,6 +23,8 @@ namespace nn {
         void iadd(param_t& p, param_t const& q);
         void resize_as(param_t& p, param_t const& q);
 
+        void zero_param(param_t& p);
+
         struct opt_t {
             opt_t();
             opt_t(nn::opt_t o);
@@ -43,7 +45,12 @@ namespace nn {
         void adam_update(param_t& p, param_t const& grad,
             opt_t& opt_data, double step_size);
 
+        void move_param(param_t& p, nn_t& nn);
+        void move_param(nn_t& nn, param_t& p);
         param_t copy_grad(nn_t const& nn);
+        void move_grad(param_t& p, nn_t const& nn);
+        void move_grad(nn_t& nn, param_t& p);
+        void zero_grad(nn_t& nn);
 
         struct log_loss {
         
