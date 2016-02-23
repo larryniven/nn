@@ -111,7 +111,7 @@ void learning_env::run()
             nn.hidden[0]->output = std::make_shared<la::gpu::vector<double>>(
                 la::gpu::vector<double>(la::vector<double>(input)));
         } else {
-            auto& v = autodiff::get_output<la::gpu::vector<double>>(nn.hidden[0]);
+            auto& v = autodiff::get_output<la::gpu::vector_like<double>>(nn.hidden[0]);
             la::gpu::to_device(v, la::vector<double>(input));
         }
         autodiff::eval(nn.output, autodiff::gpu::eval_funcs);

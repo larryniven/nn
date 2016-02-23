@@ -109,17 +109,6 @@ namespace lstm {
     void eval(lstm_nn_t const& nn);
     void grad(lstm_nn_t const& nn);
 
-    struct log_loss {
-
-        la::vector<double> gold;
-        la::vector<double> pred;
-
-        double loss();
-
-        la::vector<double> grad();
-
-    };
-
     struct blstm_feat_param_t {
         lstm_feat_param_t forward_param;
         lstm_feat_param_t backward_param;
@@ -224,6 +213,17 @@ namespace lstm {
 
     void eval(dblstm_nn_t const& nn);
     void grad(dblstm_nn_t const& nn);
+
+    struct log_loss {
+
+        la::vector<double> gold;
+        la::vector<double> pred;
+
+        double loss();
+
+        la::vector<double> grad();
+
+    };
 
 }
 

@@ -369,16 +369,6 @@ namespace lstm {
         autodiff::grad(order, autodiff::grad_funcs);
     }
 
-    double log_loss::loss()
-    {
-        return -la::dot(gold, pred);
-    }
-
-    la::vector<double> log_loss::grad()
-    {
-        return la::mul(gold, -1);
-    }
-
     blstm_feat_param_t load_blstm_feat_param(std::istream& is)
     {
         std::string line;
@@ -649,7 +639,7 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> inputs;
 
         for (int i = 0; i < frames.size(); ++i) {
-            inputs.push_back(result.graph.var(frames[i]));
+            inputs.push_back(result.graph.var(la::vector<double>(frames[i])));
         }
 
         for (int i = 0; i < p.layer.size(); ++i) {
@@ -700,6 +690,16 @@ namespace lstm {
             = autodiff::topo_order(nn.logprob);
 
         autodiff::grad(order, autodiff::grad_funcs);
+    }
+
+    double log_loss::loss()
+    {
+        return -la::dot(gold, pred);
+    }
+
+    la::vector<double> log_loss::grad()
+    {
+        return la::mul(gold, -1);
     }
 
 }
