@@ -6,6 +6,7 @@
 #include <vector>
 #include "opt/opt.h"
 #include "nn/rnn-gpu.h"
+#include "nn/rnn.h"
 
 struct learning_env {
 
@@ -106,7 +107,6 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     for (int i = 0; i < label_vec.size(); ++i) {
         label_id[label_vec[i]] = i;
     }
-
 }
 
 void learning_env::run()
@@ -144,6 +144,7 @@ void learning_env::run()
             std::vector<double> gold;
             gold.resize(label_id.size());
             gold[label_id.at(labels[t])] = 1;
+
             gold_block.insert(gold_block.end(), gold.begin(), gold.end());
         }
 
@@ -174,20 +175,21 @@ void learning_env::run()
             nn.logprob[t]->grad = std::make_shared<la::gpu::weak_vector<double>>(g);
         }
 
-        std::cout << "loss: " << loss_sum / nframes << std::endl;
 
         lstm::gpu::attach_grad(grad, nn);
         lstm::gpu::grad(nn);
-        lstm::gpu::bound(grad, -1, 1);
 
         if (ebt::in(std::string("momentum"), args)) {
             lstm::gpu::const_step_update_momentum(param, grad, opt_data, momentum, step_size);
         } else {
             lstm::gpu::adagrad_update(param, grad, opt_data, step_size);
         }
+
         lstm::gpu::zero(grad);
 
         mem.reset();
+
+        std::cout << "loss: " << loss_sum / nframes << std::endl;
 
 #if 0
         {

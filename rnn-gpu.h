@@ -9,9 +9,6 @@ namespace lstm {
 
     namespace gpu {
 
-        void bound(la::gpu::vector_like<double>& p, double min, double max);
-        void bound(la::gpu::matrix_like<double>& p, double min, double max);
-
         struct lstm_feat_param_t {
             la::gpu::matrix<double> hidden_input;
             la::gpu::matrix<double> hidden_output;
@@ -37,8 +34,6 @@ namespace lstm {
         lstm_feat_param_t to_device(lstm::lstm_feat_param_t const& param);
         void resize_as(lstm_feat_param_t& a, lstm_feat_param_t const& b);
         void zero(lstm_feat_param_t& p);
-
-        void bound(lstm_feat_param_t& p, double min, double max);
 
         void adagrad_update(lstm_feat_param_t& p, lstm_feat_param_t const& grad,
             lstm_feat_param_t& opt_data, double step_size);
@@ -72,8 +67,6 @@ namespace lstm {
         void resize_as(blstm_feat_param_t& a, blstm_feat_param_t const& b);
         void zero(blstm_feat_param_t& p);
 
-        void bound(blstm_feat_param_t& p, double min, double max);
-
         void adagrad_update(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
             blstm_feat_param_t& opt_data, double step_size);
 
@@ -98,8 +91,6 @@ namespace lstm {
         dblstm_param_t to_device(lstm::dblstm_param_t const& param);
         void resize_as(dblstm_param_t& a, dblstm_param_t const& b);
         void zero(dblstm_param_t& p);
-
-        void bound(dblstm_param_t& p, double min, double max);
 
         void adagrad_update(dblstm_param_t& p, dblstm_param_t const& grad,
             dblstm_param_t& opt_data, double step_size);

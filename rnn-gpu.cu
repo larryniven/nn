@@ -9,33 +9,6 @@ namespace lstm {
 
     namespace gpu {
 
-        struct ibound {
-            double min_value;
-            double max_value;
-
-            template <class T>
-            __host__ __device__
-            void operator()(T& t) const
-            {
-                t = min(max(t, min_value), max_value);
-            }
-        };
-
-        void bound(la::gpu::vector_like<double>& p, double min, double max)
-        {
-            thrust::for_each(
-                thrust::device_ptr<double>(p.begin()),
-                thrust::device_ptr<double>(p.end()),
-                ibound { min, max });
-        }
-
-        void bound(la::gpu::matrix_like<double>& p, double min, double max)
-        {
-            la::gpu::weak_vector<double> v(p.data(), p.rows() * p.cols());
-
-            bound(v, min, max);
-        }
-
         lstm::lstm_feat_param_t to_host(lstm_feat_param_t const& param)
         {
             lstm::lstm_feat_param_t result;
@@ -118,37 +91,18 @@ namespace lstm {
 
             la::gpu::zero(p.input_input);
             la::gpu::zero(p.input_output);
+            la::gpu::zero(p.input_peep);
             la::gpu::zero(p.input_bias);
 
             la::gpu::zero(p.output_input);
             la::gpu::zero(p.output_output);
+            la::gpu::zero(p.output_peep);
             la::gpu::zero(p.output_bias);
 
             la::gpu::zero(p.forget_input);
             la::gpu::zero(p.forget_output);
+            la::gpu::zero(p.forget_peep);
             la::gpu::zero(p.forget_bias);
-        }
-
-        void bound(lstm_feat_param_t& p, double min, double max)
-        {
-            bound(p.hidden_input, min, max);
-            bound(p.hidden_output, min, max);
-            bound(p.hidden_bias, min, max);
-
-            bound(p.input_input, min, max);
-            bound(p.input_output, min, max);
-            bound(p.input_peep, min, max);
-            bound(p.input_bias, min, max);
-
-            bound(p.output_input, min, max);
-            bound(p.output_output, min, max);
-            bound(p.output_peep, min, max);
-            bound(p.output_bias, min, max);
-
-            bound(p.forget_input, min, max);
-            bound(p.forget_output, min, max);
-            bound(p.forget_peep, min, max);
-            bound(p.forget_bias, min, max);
         }
 
         void adagrad_update(lstm_feat_param_t& p, lstm_feat_param_t const& grad,
@@ -416,16 +370,6 @@ namespace lstm {
             a.output_bias.resize(b.output_bias.size());
         }
 
-        void bound(blstm_feat_param_t& p, double min, double max)
-        {
-            bound(p.forward_param, min, max);
-            bound(p.backward_param, min, max);
-
-            bound(p.forward_output_weight, min, max);
-            bound(p.backward_output_weight, min, max);
-            bound(p.output_bias, min, max);
-        }
-
         void zero(blstm_feat_param_t& p)
         {
             zero(p.forward_param);
@@ -550,16 +494,6 @@ namespace lstm {
 
             a.softmax_weight.resize(b.softmax_weight.rows(), b.softmax_weight.cols());
             a.softmax_bias.resize(b.softmax_bias.size());
-        }
-
-        void bound(dblstm_param_t& p, double min, double max)
-        {
-            for (auto& ell: p.layer) {
-                bound(ell, min, max);
-            }
-
-            bound(p.softmax_weight, min, max);
-            bound(p.softmax_bias, min, max);
         }
 
         void zero(dblstm_param_t& p)

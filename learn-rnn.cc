@@ -166,8 +166,8 @@ void learning_env::run()
         }
 #endif
 
-#if DEBUG_TOP_10
-        if (i == 10) {
+#if DEBUG_TOP
+        if (i == DEBUG_TOP) {
             break;
         }
 #endif
