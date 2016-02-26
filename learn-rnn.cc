@@ -17,6 +17,7 @@ struct learning_env {
     lstm::dblstm_nn_t nn;
 
     double step_size;
+    double momentum;
 
     int save_every;
 
@@ -44,6 +45,7 @@ int main(int argc, char *argv[])
             {"param", "", true},
             {"opt-data", "", true},
             {"step-size", "", true},
+            {"momentum", "", false},
             {"save-every", "", false},
             {"output-param", "", false},
             {"output-opt-data", "", false},
@@ -83,6 +85,10 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     }
 
     step_size = std::stod(args.at("step-size"));
+
+    if (ebt::in(std::string("momentum"), args)) {
+        momentum = std::stod(args.at("momentum"));
+    }
 
     output_param = "param-last";
     if (ebt::in(std::string("output-param"), args)) {
@@ -147,7 +153,20 @@ void learning_env::run()
 
         lstm::dblstm_param_t grad = lstm::copy_dblstm_grad(nn);
 
-        lstm::adagrad_update(param, grad, opt_data, step_size);
+        // auto& v = grad.layer[0].forward_param.hidden_bias;
+        // for (int j = 0; j < v.size(); ++j) {
+        //     if (v(j) > 1 || v(j) < -1) {
+        //         std::cout << "    grad: " << v(j) << std::endl;
+        //     }
+        // }
+
+        lstm::bound(grad, -1, 1);
+
+        if (ebt::in(std::string("momentum"), args)) {
+            lstm::const_step_update_momentum(param, grad, opt_data, momentum, step_size);
+        } else {
+            lstm::adagrad_update(param, grad, opt_data, step_size);
+        }
 
 #if 0
         {

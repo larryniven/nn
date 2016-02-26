@@ -5,6 +5,19 @@
 
 namespace lstm {
 
+    void bound(la::vector_like<double>& u, double min, double max)
+    {
+        for (int i = 0; i < u.size(); ++i) {
+            u(i) = std::max(min, std::min(max, u(i)));
+        }
+    }
+
+    void bound(la::matrix_like<double>& u, double min, double max)
+    {
+        la::weak_vector<double> v { u.data(), u.rows() * u.cols() };
+        bound(v, min, max);
+    }
+
     lstm_feat_param_t load_lstm_feat_param(std::istream& is)
     {
         std::string line;
@@ -94,6 +107,66 @@ namespace lstm {
     {
         std::ofstream ofs { filename };
         save_lstm_feat_param(p, ofs);
+    }
+
+    void bound(lstm_feat_param_t& p, double min, double max)
+    {
+        bound(p.hidden_input, min, max);
+        bound(p.hidden_output, min, max);
+        bound(p.hidden_bias, min, max);
+
+        bound(p.input_input, min, max);
+        bound(p.input_output, min, max);
+        bound(p.input_peep, min, max);
+        bound(p.input_bias, min, max);
+
+        bound(p.output_input, min, max);
+        bound(p.output_output, min, max);
+        bound(p.output_peep, min, max);
+        bound(p.output_bias, min, max);
+
+        bound(p.forget_input, min, max);
+        bound(p.forget_output, min, max);
+        bound(p.forget_peep, min, max);
+        bound(p.forget_bias, min, max);
+    }
+
+    void const_step_update_momentum(lstm_feat_param_t& p, lstm_feat_param_t const& grad,
+        lstm_feat_param_t& opt_data, double momentum, double step_size)
+    {
+        opt::const_step_update_momentum(p.hidden_input, grad.hidden_input,
+            opt_data.hidden_input, momentum, step_size);
+        opt::const_step_update_momentum(p.hidden_output, grad.hidden_output,
+            opt_data.hidden_output, momentum, step_size);
+        opt::const_step_update_momentum(p.hidden_bias, grad.hidden_bias,
+            opt_data.hidden_bias, momentum, step_size);
+
+        opt::const_step_update_momentum(p.input_input, grad.input_input,
+            opt_data.input_input, momentum, step_size);
+        opt::const_step_update_momentum(p.input_output, grad.input_output,
+            opt_data.input_output, momentum, step_size);
+        opt::const_step_update_momentum(p.input_peep, grad.input_peep,
+            opt_data.input_peep, momentum, step_size);
+        opt::const_step_update_momentum(p.input_bias, grad.input_bias,
+            opt_data.input_bias, momentum, step_size);
+
+        opt::const_step_update_momentum(p.output_input, grad.output_input,
+            opt_data.output_input, momentum, step_size);
+        opt::const_step_update_momentum(p.output_output, grad.output_output,
+            opt_data.output_output, momentum, step_size);
+        opt::const_step_update_momentum(p.output_peep, grad.output_peep,
+            opt_data.output_peep, momentum, step_size);
+        opt::const_step_update_momentum(p.output_bias, grad.output_bias,
+            opt_data.output_bias, momentum, step_size);
+
+        opt::const_step_update_momentum(p.forget_input, grad.forget_input,
+            opt_data.forget_input, momentum, step_size);
+        opt::const_step_update_momentum(p.forget_output, grad.forget_output,
+            opt_data.forget_output, momentum, step_size);
+        opt::const_step_update_momentum(p.forget_peep, grad.forget_peep,
+            opt_data.forget_peep, momentum, step_size);
+        opt::const_step_update_momentum(p.forget_bias, grad.forget_bias,
+            opt_data.forget_bias, momentum, step_size);
     }
 
     void adagrad_update(lstm_feat_param_t& p, lstm_feat_param_t const& grad,
@@ -412,6 +485,32 @@ namespace lstm {
         save_blstm_feat_param(p, ofs);
     }
 
+    void bound(blstm_feat_param_t& p, double min, double max)
+    {
+        bound(p.forward_param, min, max);
+        bound(p.backward_param, min, max);
+
+        bound(p.forward_output_weight, min, max);
+        bound(p.backward_output_weight, min, max);
+        bound(p.output_bias, min, max);
+    }
+
+    void const_step_update_momentum(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
+        blstm_feat_param_t& opt_data, double momentum, double step_size)
+    {
+        const_step_update_momentum(p.forward_param, grad.forward_param,
+            opt_data.forward_param, momentum, step_size);
+        const_step_update_momentum(p.backward_param, grad.backward_param,
+            opt_data.backward_param, momentum, step_size);
+
+        opt::const_step_update_momentum(p.forward_output_weight, grad.forward_output_weight,
+            opt_data.forward_output_weight, momentum, step_size);
+        opt::const_step_update_momentum(p.backward_output_weight, grad.backward_output_weight,
+            opt_data.backward_output_weight, momentum, step_size);
+        opt::const_step_update_momentum(p.output_bias, grad.output_bias,
+            opt_data.output_bias, momentum, step_size);
+    }
+
     void adagrad_update(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
         blstm_feat_param_t& opt_data, double step_size)
     {
@@ -617,6 +716,30 @@ namespace lstm {
         save_dblstm_param(p, ofs);
     }
 
+    void bound(dblstm_param_t& p, double min, double max)
+    {
+        for (int i = 0; i < p.layer.size(); ++i) {
+            bound(p.layer[i], min, max);
+        }
+
+        bound(p.softmax_weight, min, max);
+        bound(p.softmax_bias, min, max);
+    }
+
+    void const_step_update_momentum(dblstm_param_t& p, dblstm_param_t const& grad,
+        dblstm_param_t& opt_data, double momentum, double step_size)
+    {
+        for (int i = 0; i < p.layer.size(); ++i) {
+            const_step_update_momentum(p.layer[i], grad.layer[i],
+                opt_data.layer[i], momentum, step_size);
+        }
+
+        opt::const_step_update_momentum(p.softmax_weight, grad.softmax_weight,
+            opt_data.softmax_weight, momentum, step_size);
+        opt::const_step_update_momentum(p.softmax_bias, grad.softmax_bias,
+            opt_data.softmax_bias, momentum, step_size);
+    }
+
     void adagrad_update(dblstm_param_t& p, dblstm_param_t const& grad,
         dblstm_param_t& opt_data, double step_size)
     {
@@ -646,7 +769,8 @@ namespace lstm {
             if (i == 0) {
                 result.layer.push_back(make_blstm_feat_nn(result.graph, p.layer[0], inputs));
             } else {
-                result.layer.push_back(make_blstm_feat_nn(result.graph, p.layer[i], result.layer[i-1].output));
+                result.layer.push_back(make_blstm_feat_nn(result.graph, p.layer[i],
+                    result.layer[i-1].output));
             }
         }
 

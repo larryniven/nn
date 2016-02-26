@@ -6,6 +6,9 @@
 
 namespace lstm {
 
+    void bound(la::vector_like<double>& u, double min, double max);
+    void bound(la::matrix_like<double>& u, double min, double max);
+
     struct lstm_feat_param_t {
         la::matrix<double> hidden_input;
         la::matrix<double> hidden_output;
@@ -32,6 +35,11 @@ namespace lstm {
 
     void save_lstm_feat_param(lstm_feat_param_t const& p, std::ostream& os);
     void save_lstm_feat_param(lstm_feat_param_t const& p, std::string filename);
+
+    void bound(lstm_feat_param_t& p, double min, double max);
+
+    void const_step_update_momentum(lstm_feat_param_t& p, lstm_feat_param_t const& grad,
+        lstm_feat_param_t& opt_data, double momentum, double step_size);
 
     void adagrad_update(lstm_feat_param_t& p, lstm_feat_param_t const& grad,
         lstm_feat_param_t& opt_data, double step_size);
@@ -124,6 +132,11 @@ namespace lstm {
     void save_blstm_feat_param(blstm_feat_param_t const& p, std::ostream& os);
     void save_blstm_feat_param(blstm_feat_param_t const& p, std::string filename);
 
+    void bound(blstm_feat_param_t& p, double min, double max);
+
+    void const_step_update_momentum(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
+        blstm_feat_param_t& opt_data, double momentum, double step_size);
+
     void adagrad_update(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
         blstm_feat_param_t& opt_data, double step_size);
 
@@ -191,6 +204,11 @@ namespace lstm {
 
     void save_dblstm_param(dblstm_param_t const& p, std::ostream& os);
     void save_dblstm_param(dblstm_param_t const& p, std::string filename);
+
+    void bound(dblstm_param_t& p, double min, double max);
+
+    void const_step_update_momentum(dblstm_param_t& p, dblstm_param_t const& grad,
+        dblstm_param_t& opt_data, double momentum, double step_size);
 
     void adagrad_update(dblstm_param_t& p, dblstm_param_t const& grad,
         dblstm_param_t& opt_data, double step_size);
