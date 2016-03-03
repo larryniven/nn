@@ -1,9 +1,9 @@
-#ifndef RNN_GPU_H
-#define RNN_GPU_H
+#ifndef LSTM_GPU_H
+#define LSTM_GPU_H
 
 #include "la/la-gpu.h"
-#include "nn/rnn.h"
 #include "autodiff/autodiff-gpu.h"
+#include "nn/lstm.h"
 
 namespace lstm {
 

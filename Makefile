@@ -3,22 +3,16 @@ AR = gcc-ar
 
 .PHONY: all clean gpu
 
-all: learn predict learn-rnn predict-rnn libnn.a
+all: learn predict learn-lstm predict-lstm libnn.a
 
-gpu: learn-gpu learn-rnn-gpu libnngpu.a
+gpu: learn-gpu learn-lstm-gpu libnngpu.a
 
 clean:
 	-rm *.o
-	-rm learn predict learn-rnn predict-rnn libnn.a learn-gpu learn-rnn-gpu libnngpu.a
+	-rm learn predict learn-lstm predict-lstm libnn.a learn-gpu learn-lstm-gpu libnngpu.a
 
 libnn.a: nn.o
 	$(AR) rcs $@ $^
-
-nn-gpu.o: nn-gpu.cu
-	nvcc $(CXXFLAGS) -c nn-gpu.cu
-
-rnn-gpu.o: rnn-gpu.cu
-	nvcc $(CXXFLAGS) -c rnn-gpu.cu
 
 learn: nn.o learn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lopt -lla -lebt -lblas
@@ -26,17 +20,23 @@ learn: nn.o learn.o
 predict: nn.o predict.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lopt -lla -lebt -lblas
 
-learn-rnn: rnn.o learn-rnn.o
+learn-lstm: lstm.o learn-lstm.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
-predict-rnn: rnn.o predict-rnn.o
+predict-lstm: lstm.o predict-lstm.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 nn.o: nn.h
-rnn.o: rnn.h
+lstm.o: lstm.h
 
 libnngpu.a: nn.o nn-gpu.o
 	$(AR) rcs $@ $^
+
+nn-gpu.o: nn-gpu.cu
+	nvcc $(CXXFLAGS) -c nn-gpu.cu
+
+lstm-gpu.o: lstm-gpu.cu
+	nvcc $(CXXFLAGS) -c lstm-gpu.cu
 
 learn-gpu.o: learn-gpu.cu
 	nvcc $(CXXFLAGS) -c learn-gpu.cu
@@ -44,13 +44,13 @@ learn-gpu.o: learn-gpu.cu
 learn-gpu: learn-gpu.o nn-gpu.o nn.o
 	$(CXX) $(CXXFLAGS) -L /opt/cuda/lib64 -o $@ $^ -lautodiffgpu -loptgpu -llagpu -lblas -lebt -lcublas -lcudart
 
-learn-rnn-gpu.o: learn-rnn-gpu.cu
-	nvcc $(CXXFLAGS) -c learn-rnn-gpu.cu
+learn-lstm-gpu.o: learn-lstm-gpu.cu
+	nvcc $(CXXFLAGS) -c learn-lstm-gpu.cu
 
-learn-rnn-gpu: learn-rnn-gpu.o rnn-gpu.o rnn.o
+learn-lstm-gpu: learn-lstm-gpu.o lstm-gpu.o lstm.o
 	$(CXX) $(CXXFLAGS) -L /opt/cuda/lib64 -o $@ $^ -lautodiffgpu -loptgpu -lspeech -llagpu -lblas -lebt -lcublas -lcudart
 
 nn-gpu.o: nn-gpu.h nn.h
-rnn-gpu.o: rnn-gpu.h
+lstm-gpu.o: lstm-gpu.h
 learn-gpu.o: nn-gpu.h
-learn-rnn-gpu.o: rnn-gpu.h
+learn-lstm-gpu.o: lstm-gpu.h

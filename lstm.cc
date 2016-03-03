@@ -1,4 +1,4 @@
-#include "nn/rnn.h"
+#include "nn/lstm.h"
 #include "opt/opt.h"
 #include <fstream>
 #include <algorithm>

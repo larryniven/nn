@@ -1,5 +1,5 @@
-#ifndef RNN_H
-#define RNN_H
+#ifndef LSTM_H
+#define LSTM_H
 
 #include "la/la.h"
 #include "autodiff/autodiff.h"

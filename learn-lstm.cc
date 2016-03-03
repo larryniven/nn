@@ -5,17 +5,16 @@
 #include <fstream>
 #include <vector>
 #include "opt/opt.h"
-#include "nn/rnn-gpu.h"
-#include "nn/rnn.h"
+#include "nn/lstm.h"
 
 struct learning_env {
 
     std::ifstream frame_batch;
     std::ifstream label_batch;
 
-    lstm::gpu::dblstm_param_t param;
-    lstm::gpu::dblstm_param_t opt_data;
-    lstm::gpu::dblstm_nn_t nn;
+    lstm::dblstm_param_t param;
+    lstm::dblstm_param_t opt_data;
+    lstm::dblstm_nn_t nn;
 
     double step_size;
     double momentum;
@@ -38,7 +37,7 @@ struct learning_env {
 int main(int argc, char *argv[])
 {
     ebt::ArgumentSpec spec {
-        "learn-rnn",
+        "learn-lstm",
         "Train a LSTM frame classifier",
         {
             {"frame-batch", "", true},
@@ -76,10 +75,8 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     frame_batch.open(args.at("frame-batch"));
     label_batch.open(args.at("label-batch"));
 
-    param = lstm::gpu::to_device(
-        lstm::load_dblstm_param(args.at("param")));
-    opt_data = lstm::gpu::to_device(
-        lstm::load_dblstm_param(args.at("opt-data")));
+    param = lstm::load_dblstm_param(args.at("param"));
+    opt_data = lstm::load_dblstm_param(args.at("opt-data"));
 
     if (ebt::in(std::string("save-every"), args)) {
         save_every = std::stoi(args.at("save-every"));
@@ -107,16 +104,12 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     for (int i = 0; i < label_vec.size(); ++i) {
         label_id[label_vec[i]] = i;
     }
+
 }
 
 void learning_env::run()
 {
     int i = 1;
-
-    lstm::gpu::dblstm_param_t grad;
-    lstm::gpu::resize_as(grad, param);
-
-    autodiff::gpu::memory_pool<double> mem { 100000000 };
 
     while (1) {
         std::vector<std::vector<double>> frames;
@@ -131,35 +124,20 @@ void learning_env::run()
             break;
         }
 
-        nn = lstm::gpu::make_dblstm_nn(param, mem, frames);
+        nn = lstm::make_dblstm_nn(param, frames);
 
-        lstm::gpu::eval(nn);
+        lstm::eval(nn);
 
         double loss_sum = 0;
         double nframes = 0;
 
-        std::vector<double> gold_block;
-
         for (int t = 0; t < nn.logprob.size(); ++t) {
-            std::vector<double> gold;
+            auto& pred = autodiff::get_output<la::vector<double>>(nn.logprob.at(t));
+            la::vector<double> gold;
             gold.resize(label_id.size());
-            gold[label_id.at(labels[t])] = 1;
-
-            gold_block.insert(gold_block.end(), gold.begin(), gold.end());
-        }
-
-        double *d = mem.alloc(gold_block.size());
-        la::gpu::weak_vector<double> gold_device_block { d, gold_block.size() };
-        la::gpu::to_device(gold_device_block, la::vector<double>(gold_block));
-        unsigned int gold_dim = label_id.size();
-
-        for (int t = 0; t < nn.logprob.size(); ++t) {
-            auto& pred = autodiff::get_output<la::gpu::vector_like<double>>(nn.logprob.at(t));
-
-            lstm::gpu::log_loss loss {
-                la::gpu::weak_vector<double>(gold_device_block.data() + t * gold_dim, gold_dim),
-                pred };
-
+            gold(label_id.at(labels[t])) = 1;
+            lstm::log_loss loss { gold, pred };
+            nn.logprob[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
             if (std::isnan(loss.loss())) {
                 std::cerr << "loss is nan" << std::endl;
                 exit(1);
@@ -167,29 +145,28 @@ void learning_env::run()
                 loss_sum += loss.loss();
                 nframes += 1;
             }
-
-            la::gpu::weak_vector<double> g(gold_device_block.data() + t * gold_dim, gold_dim);
-
-            la::gpu::imul(g, -1);
-
-            nn.logprob[t]->grad = std::make_shared<la::gpu::weak_vector<double>>(g);
         }
-
-
-        lstm::gpu::attach_grad(grad, nn);
-        lstm::gpu::grad(nn);
-
-        if (ebt::in(std::string("momentum"), args)) {
-            lstm::gpu::const_step_update_momentum(param, grad, opt_data, momentum, step_size);
-        } else {
-            lstm::gpu::adagrad_update(param, grad, opt_data, step_size);
-        }
-
-        lstm::gpu::zero(grad);
-
-        mem.reset();
 
         std::cout << "loss: " << loss_sum / nframes << std::endl;
+
+        lstm::grad(nn);
+
+        lstm::dblstm_param_t grad = lstm::copy_dblstm_grad(nn);
+
+        // auto& v = grad.layer[0].forward_param.hidden_bias;
+        // for (int j = 0; j < v.size(); ++j) {
+        //     if (v(j) > 1 || v(j) < -1) {
+        //         std::cout << "    grad: " << v(j) << std::endl;
+        //     }
+        // }
+
+        lstm::bound(grad, -1, 1);
+
+        if (ebt::in(std::string("momentum"), args)) {
+            lstm::const_step_update_momentum(param, grad, opt_data, momentum, step_size);
+        } else {
+            lstm::adagrad_update(param, grad, opt_data, step_size);
+        }
 
 #if 0
         {
@@ -197,18 +174,18 @@ void learning_env::run()
             p.hidden_input(0, 0) += 1e-8;
             lstm::nn_t nn2 = lstm::make_nn(p, frames);
             lstm::eval(nn2);
-            auto& pred = autodiff::get_output<la::vector_like<double>>(nn2.logprob.at(1));
+            auto& pred = autodiff::get_output<la::vector<double>>(nn2.logprob.at(1));
             la::vector<double> gold;
             gold.resize(label_id.size());
             gold(label_id.at(labels[1])) = 1;
             lstm::log_loss loss2 { gold, pred };
 
-            auto& grad = autodiff::get_grad<la::matrix_like<double>>(nn.hidden_input);
+            auto& grad = autodiff::get_grad<la::matrix<double>>(nn.hidden_input);
             std::cout << (loss2.loss() - loss_1) / 1e-8 << " " << grad(0, 0) << std::endl;
         }
 #endif
 
-#ifdef DEBUG_TOP
+#if DEBUG_TOP
         if (i == DEBUG_TOP) {
             break;
         }
@@ -217,7 +194,7 @@ void learning_env::run()
         ++i;
     }
 
-    lstm::save_dblstm_param(lstm::gpu::to_host(param), output_param);
-    lstm::save_dblstm_param(lstm::gpu::to_host(opt_data), output_opt_data);
+    lstm::save_dblstm_param(param, output_param);
+    lstm::save_dblstm_param(opt_data, output_opt_data);
 }
 

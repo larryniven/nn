@@ -1,4 +1,4 @@
-#include "nn/rnn-gpu.h"
+#include "nn/lstm-gpu.h"
 #include "opt/opt-gpu.h"
 #include "autodiff/autodiff-gpu.h"
 #include <algorithm>

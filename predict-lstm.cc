@@ -1,6 +1,6 @@
 #include "ebt/ebt.h"
 #include "speech/speech.h"
-#include "nn/rnn.h"
+#include "nn/lstm.h"
 #include <fstream>
 
 struct prediction_env {
@@ -23,7 +23,7 @@ struct prediction_env {
 int main(int argc, char *argv[])
 {
     ebt::ArgumentSpec spec {
-        "predict-rnn",
+        "predict-lstm",
         "Predict frames with LSTM",
         {
             {"frame-batch", "", true},
