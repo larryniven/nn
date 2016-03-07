@@ -207,6 +207,44 @@ namespace lstm {
             opt_data.forget_bias, step_size);
     }
 
+    void rmsprop_update(lstm_feat_param_t& p, lstm_feat_param_t const& grad,
+        lstm_feat_param_t& opt_data, double decay, double step_size)
+    {
+        opt::rmsprop_update(p.hidden_input, grad.hidden_input,
+            opt_data.hidden_input, decay, step_size);
+        opt::rmsprop_update(p.hidden_output, grad.hidden_output,
+            opt_data.hidden_output, decay, step_size);
+        opt::rmsprop_update(p.hidden_bias, grad.hidden_bias,
+            opt_data.hidden_bias, decay, step_size);
+
+        opt::rmsprop_update(p.input_input, grad.input_input,
+            opt_data.input_input, decay, step_size);
+        opt::rmsprop_update(p.input_output, grad.input_output,
+            opt_data.input_output, decay, step_size);
+        opt::rmsprop_update(p.input_peep, grad.input_peep,
+            opt_data.input_peep, decay, step_size);
+        opt::rmsprop_update(p.input_bias, grad.input_bias,
+            opt_data.input_bias, decay, step_size);
+
+        opt::rmsprop_update(p.output_input, grad.output_input,
+            opt_data.output_input, decay, step_size);
+        opt::rmsprop_update(p.output_output, grad.output_output,
+            opt_data.output_output, decay, step_size);
+        opt::rmsprop_update(p.output_peep, grad.output_peep,
+            opt_data.output_peep, decay, step_size);
+        opt::rmsprop_update(p.output_bias, grad.output_bias,
+            opt_data.output_bias, decay, step_size);
+
+        opt::rmsprop_update(p.forget_input, grad.forget_input,
+            opt_data.forget_input, decay, step_size);
+        opt::rmsprop_update(p.forget_output, grad.forget_output,
+            opt_data.forget_output, decay, step_size);
+        opt::rmsprop_update(p.forget_peep, grad.forget_peep,
+            opt_data.forget_peep, decay, step_size);
+        opt::rmsprop_update(p.forget_bias, grad.forget_bias,
+            opt_data.forget_bias, decay, step_size);
+    }
+
     lstm_feat_nn_t make_forward_lstm_feat_nn(autodiff::computation_graph& g,
         lstm_feat_param_t const& p,
         std::vector<std::shared_ptr<autodiff::op_t>> const& inputs)
@@ -527,6 +565,22 @@ namespace lstm {
             opt_data.output_bias, step_size);
     }
 
+    void rmsprop_update(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
+        blstm_feat_param_t& opt_data, double decay, double step_size)
+    {
+        rmsprop_update(p.forward_param, grad.forward_param,
+            opt_data.forward_param, decay, step_size);
+        rmsprop_update(p.backward_param, grad.backward_param,
+            opt_data.backward_param, decay, step_size);
+
+        opt::rmsprop_update(p.forward_output_weight, grad.forward_output_weight,
+            opt_data.forward_output_weight, decay, step_size);
+        opt::rmsprop_update(p.backward_output_weight, grad.backward_output_weight,
+            opt_data.backward_output_weight, decay, step_size);
+        opt::rmsprop_update(p.output_bias, grad.output_bias,
+            opt_data.output_bias, decay, step_size);
+    }
+
     blstm_param_t load_blstm_param(std::istream& is)
     {
         std::string line;
@@ -752,6 +806,20 @@ namespace lstm {
             opt_data.softmax_weight, step_size);
         opt::adagrad_update(p.softmax_bias, grad.softmax_bias,
             opt_data.softmax_bias, step_size);
+    }
+
+    void rmsprop_update(dblstm_param_t& p, dblstm_param_t const& grad,
+        dblstm_param_t& opt_data, double decay, double step_size)
+    {
+        for (int i = 0; i < p.layer.size(); ++i) {
+            rmsprop_update(p.layer[i], grad.layer[i],
+                opt_data.layer[i], decay, step_size);
+        }
+
+        opt::rmsprop_update(p.softmax_weight, grad.softmax_weight,
+            opt_data.softmax_weight, decay, step_size);
+        opt::rmsprop_update(p.softmax_bias, grad.softmax_bias,
+            opt_data.softmax_bias, decay, step_size);
     }
 
     dblstm_nn_t make_dblstm_nn(dblstm_param_t const& p,

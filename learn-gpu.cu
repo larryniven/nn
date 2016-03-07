@@ -82,8 +82,6 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
 
 void learning_env::run()
 {
-    ebt::logger_t::logger.stop();
-
     std::string line;
 
     int sample = 0;

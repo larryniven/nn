@@ -44,6 +44,9 @@ namespace lstm {
     void adagrad_update(lstm_feat_param_t& p, lstm_feat_param_t const& grad,
         lstm_feat_param_t& opt_data, double step_size);
 
+    void rmsprop_update(lstm_feat_param_t& p, lstm_feat_param_t const& grad,
+        lstm_feat_param_t& opt_data, double decay, double step_size);
+
     struct lstm_feat_nn_t {
         std::shared_ptr<autodiff::op_t> hidden_input;
         std::shared_ptr<autodiff::op_t> hidden_output;
@@ -140,6 +143,9 @@ namespace lstm {
     void adagrad_update(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
         blstm_feat_param_t& opt_data, double step_size);
 
+    void rmsprop_update(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
+        blstm_feat_param_t& opt_data, double decay, double step_size);
+
     struct blstm_param_t {
         blstm_feat_param_t feat_param;
 
@@ -155,6 +161,9 @@ namespace lstm {
 
     void adagrad_update(blstm_param_t& p, blstm_param_t const& grad,
         blstm_param_t& opt_data, double step_size);
+
+    void rmsprop_update(blstm_param_t& p, blstm_param_t const& grad,
+        blstm_param_t& opt_data, double decay, double step_size);
 
     struct blstm_feat_nn_t {
         lstm_feat_nn_t forward_feat_nn;
@@ -212,6 +221,9 @@ namespace lstm {
 
     void adagrad_update(dblstm_param_t& p, dblstm_param_t const& grad,
         dblstm_param_t& opt_data, double step_size);
+
+    void rmsprop_update(dblstm_param_t& p, dblstm_param_t const& grad,
+        dblstm_param_t& opt_data, double decay, double step_size);
 
     struct dblstm_nn_t {
         autodiff::computation_graph graph;

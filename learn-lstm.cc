@@ -17,6 +17,7 @@ struct learning_env {
     lstm::dblstm_nn_t nn;
 
     double step_size;
+    double rmsprop_decay;
     double momentum;
 
     int save_every;
@@ -45,6 +46,7 @@ int main(int argc, char *argv[])
             {"param", "", true},
             {"opt-data", "", true},
             {"step-size", "", true},
+            {"rmsprop-decay", "", false},
             {"momentum", "", false},
             {"save-every", "", false},
             {"output-param", "", false},
@@ -88,6 +90,10 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
 
     if (ebt::in(std::string("momentum"), args)) {
         momentum = std::stod(args.at("momentum"));
+    }
+
+    if (ebt::in(std::string("rmsprop-decay"), args)) {
+        rmsprop_decay = std::stod(args.at("rmsprop-decay"));
     }
 
     output_param = "param-last";
@@ -164,6 +170,8 @@ void learning_env::run()
 
         if (ebt::in(std::string("momentum"), args)) {
             lstm::const_step_update_momentum(param, grad, opt_data, momentum, step_size);
+        } else if (ebt::in(std::string("rmsprop-decay"), args)) {
+            lstm::rmsprop_update(param, grad, opt_data, rmsprop_decay, step_size);
         } else {
             lstm::adagrad_update(param, grad, opt_data, step_size);
         }
