@@ -3,7 +3,7 @@ AR = gcc-ar
 
 .PHONY: all clean gpu
 
-all: learn predict learn-lstm predict-lstm libnn.a
+all: learn predict learn-lstm predict-lstm learn-gru predict-gru libnn.a
 
 gpu: learn-gpu learn-lstm-gpu libnngpu.a
 
@@ -26,8 +26,15 @@ learn-lstm: lstm.o learn-lstm.o
 predict-lstm: lstm.o predict-lstm.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
+learn-gru: gru.o learn-gru.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+predict-gru: gru.o predict-gru.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
 nn.o: nn.h
 lstm.o: lstm.h
+gru.o: gru.h
 
 libnngpu.a: nn.o nn-gpu.o
 	$(AR) rcs $@ $^
