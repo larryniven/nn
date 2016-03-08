@@ -30,6 +30,8 @@ struct learning_env {
 
     std::unordered_map<std::string, int> label_id;
 
+    int seed;
+
     std::unordered_map<std::string, std::string> args;
 
     learning_env(std::unordered_map<std::string, std::string> args);
@@ -56,6 +58,7 @@ int main(int argc, char *argv[])
             {"output-param", "", false},
             {"output-opt-data", "", false},
             {"label", "", true},
+            {"seed", "", false},
         }
     };
 
@@ -118,13 +121,18 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     for (int i = 0; i < label_vec.size(); ++i) {
         label_id[label_vec[i]] = i;
     }
+
+    seed = 1;
+    if (ebt::in(std::string("seed"), args)) {
+        seed = std::stoi(args.at("seed"));
+    }
 }
 
 void learning_env::run()
 {
     int i = 1;
 
-    std::default_random_engine gen;
+    std::default_random_engine gen { seed };
     std::bernoulli_distribution bernoulli { rnndrop_prob };
 
     while (1) {
