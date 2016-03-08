@@ -12,6 +12,8 @@ struct prediction_env {
 
     std::vector<std::string> label;
 
+    double rnndrop_prob;
+
     std::unordered_map<std::string, std::string> args;
 
     prediction_env(std::unordered_map<std::string, std::string> args);
@@ -29,6 +31,7 @@ int main(int argc, char *argv[])
             {"frame-batch", "", true},
             {"param", "", true},
             {"label", "", true},
+            {"rnndrop-prob", "", false},
         }
     };
 
@@ -56,6 +59,10 @@ prediction_env::prediction_env(std::unordered_map<std::string, std::string> args
     param = lstm::load_dblstm_param(args.at("param"));
 
     label = speech::load_label_set(args.at("label"));
+
+    if (ebt::in(std::string("rnndrop-prob"), args)) {
+        rnndrop_prob = std::stod(args.at("rnndrop-prob"));
+    }
 }
 
 void prediction_env::run()
@@ -72,6 +79,21 @@ void prediction_env::run()
         }
 
         nn = make_dblstm_nn(param, frames);
+
+        if (ebt::in(std::string("rnndrop-prob"), args)) {
+            for (int ell = 0; ell < nn.layer.size(); ++ell) {
+                la::vector<double> mask_vec;
+                mask_vec.resize(param.layer[ell].forward_param.hidden_input.rows(), 1.0 / rnndrop_prob);
+
+                std::shared_ptr<autodiff::op_t> mask = nn.graph.var(mask_vec);
+
+                auto& cell_mask = nn.layer[ell].forward_feat_nn.cell_mask;
+
+                for (int i = 0; i < cell_mask.size(); ++i) {
+                    cell_mask[i] = mask;
+                }
+            }
+        }
 
         lstm::eval(nn);
 

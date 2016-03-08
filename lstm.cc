@@ -270,6 +270,10 @@ namespace lstm {
         result.forget_peep = g.var(p.forget_peep);
         result.forget_bias = g.var(p.forget_bias);
 
+        la::vector<double> v;
+        v.resize(p.hidden_input.rows(), 1);
+        result.one = g.var(v);
+
         result.hidden.push_back(autodiff::tanh(
             autodiff::add(autodiff::mul(result.hidden_input, inputs.front()),
             result.hidden_bias)));
@@ -278,8 +282,12 @@ namespace lstm {
             autodiff::add(autodiff::mul(result.input_input, inputs.front()),
             result.input_bias)));
 
-        result.cell.push_back(autodiff::emul(result.input_gate.back(),
-            result.hidden.back()));
+        result.cell_mask.push_back(result.one);
+
+        result.cell.push_back(autodiff::emul(
+            result.cell_mask.back(),
+            autodiff::emul(result.input_gate.back(), result.hidden.back())
+        ));
 
         result.output_gate.push_back(autodiff::logistic(autodiff::add(
             std::vector<std::shared_ptr<autodiff::op_t>> {
@@ -315,9 +323,14 @@ namespace lstm {
                     result.forget_bias
                 })));
 
-            result.cell.push_back(autodiff::add(
-                autodiff::emul(result.forget_gate.back(), result.cell.back()),
-                autodiff::emul(result.input_gate.back(), result.hidden.back())));
+            result.cell_mask.push_back(result.one);
+
+            result.cell.push_back(autodiff::emul(
+                result.cell_mask.back(),
+                autodiff::add(
+                    autodiff::emul(result.forget_gate.back(), result.cell.back()),
+                    autodiff::emul(result.input_gate.back(), result.hidden.back()))
+            ));
 
             result.output_gate.push_back(autodiff::logistic(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
@@ -349,6 +362,7 @@ namespace lstm {
         std::reverse(result.output_gate.begin(), result.output_gate.end());
         std::reverse(result.forget_gate.begin(), result.forget_gate.end());
         std::reverse(result.output.begin(), result.output.end());
+        std::reverse(result.cell_mask.begin(), result.cell_mask.end());
 
         return result;
     }

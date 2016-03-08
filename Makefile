@@ -9,7 +9,8 @@ gpu: learn-gpu learn-lstm-gpu libnngpu.a
 
 clean:
 	-rm *.o
-	-rm learn predict learn-lstm predict-lstm libnn.a learn-gpu learn-lstm-gpu libnngpu.a
+	-rm learn predict learn-lstm predict-lstm learn-gru predict-gru libnn.a
+	-rm learn-lstm-gpu libnngpu.a
 
 libnn.a: nn.o
 	$(AR) rcs $@ $^

@@ -6,6 +6,7 @@
 #include <vector>
 #include "opt/opt.h"
 #include "nn/lstm.h"
+#include <random>
 
 struct learning_env {
 
@@ -19,6 +20,8 @@ struct learning_env {
     double step_size;
     double rmsprop_decay;
     double momentum;
+
+    double rnndrop_prob;
 
     int save_every;
 
@@ -48,6 +51,7 @@ int main(int argc, char *argv[])
             {"step-size", "", true},
             {"rmsprop-decay", "", false},
             {"momentum", "", false},
+            {"rnndrop-prob", "", false},
             {"save-every", "", false},
             {"output-param", "", false},
             {"output-opt-data", "", false},
@@ -96,6 +100,10 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
         rmsprop_decay = std::stod(args.at("rmsprop-decay"));
     }
 
+    if (ebt::in(std::string("rnndrop-prob"), args)) {
+        rnndrop_prob = std::stod(args.at("rnndrop-prob"));
+    }
+
     output_param = "param-last";
     if (ebt::in(std::string("output-param"), args)) {
         output_param = args.at("output-param");
@@ -110,27 +118,48 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     for (int i = 0; i < label_vec.size(); ++i) {
         label_id[label_vec[i]] = i;
     }
-
 }
 
 void learning_env::run()
 {
     int i = 1;
 
+    std::default_random_engine gen;
+    std::bernoulli_distribution bernoulli { rnndrop_prob };
+
     while (1) {
         std::vector<std::vector<double>> frames;
 
         frames = speech::load_frame_batch(frame_batch);
 
-        std::vector<std::string> labels;
+	std::vector<std::string> labels;
 
-        labels = speech::load_label_batch(label_batch);
+	labels = speech::load_label_batch(label_batch);
 
         if (!frame_batch || !label_batch) {
             break;
         }
 
         nn = lstm::make_dblstm_nn(param, frames);
+
+        if (ebt::in(std::string("rnndrop-prob"), args)) {
+            for (int ell = 0; ell < nn.layer.size(); ++ell) {
+                la::vector<double> mask_vec;
+                mask_vec.resize(param.layer[ell].forward_param.hidden_input.rows());
+
+                for (int i = 0; i < mask_vec.size(); ++i) {
+                    mask_vec(i) = bernoulli(gen);
+                }
+
+                std::shared_ptr<autodiff::op_t> mask = nn.graph.var(mask_vec);
+
+                auto& cell_mask = nn.layer[ell].forward_feat_nn.cell_mask;
+
+                for (int i = 0; i < cell_mask.size(); ++i) {
+                    cell_mask[i] = mask;
+                }
+            }
+        }
 
         lstm::eval(nn);
 
@@ -158,13 +187,6 @@ void learning_env::run()
         lstm::grad(nn);
 
         lstm::dblstm_param_t grad = lstm::copy_dblstm_grad(nn);
-
-        // auto& v = grad.layer[0].forward_param.hidden_bias;
-        // for (int j = 0; j < v.size(); ++j) {
-        //     if (v(j) > 1 || v(j) < -1) {
-        //         std::cout << "    grad: " << v(j) << std::endl;
-        //     }
-        // }
 
         lstm::bound(grad, -1, 1);
 
