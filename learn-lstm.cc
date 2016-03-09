@@ -159,13 +159,15 @@ void learning_env::run()
                     mask_vec(i) = bernoulli(gen);
                 }
 
-                std::shared_ptr<autodiff::op_t> mask = nn.graph.var(mask_vec);
+                auto& f_cell_mask = nn.layer[ell].forward_feat_nn.cell_mask;
+                f_cell_mask->output = std::make_shared<la::vector<double>>(mask_vec);
 
-                auto& cell_mask = nn.layer[ell].forward_feat_nn.cell_mask;
-
-                for (int i = 0; i < cell_mask.size(); ++i) {
-                    cell_mask[i] = mask;
+                for (int i = 0; i < mask_vec.size(); ++i) {
+                    mask_vec(i) = bernoulli(gen);
                 }
+
+                auto& b_cell_mask = nn.layer[ell].backward_feat_nn.cell_mask;
+                b_cell_mask->output = std::make_shared<la::vector<double>>(mask_vec);
             }
         }
 

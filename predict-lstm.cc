@@ -32,6 +32,7 @@ int main(int argc, char *argv[])
             {"param", "", true},
             {"label", "", true},
             {"rnndrop-prob", "", false},
+            {"logprob", "", false}
         }
     };
 
@@ -69,6 +70,28 @@ void prediction_env::run()
 {
     int i = 1;
 
+    if (ebt::in(std::string("rnndrop-prob"), args)) {
+        for (int ell = 0; ell < param.layer.size(); ++i) {
+            auto& fi_peep = param.layer[i].forward_param.input_peep;
+            la::imul(fi_peep, 1.0 / rnndrop_prob);
+
+            auto& ff_peep = param.layer[i].forward_param.forget_peep;
+            la::imul(ff_peep, 1.0 / rnndrop_prob);
+
+            auto& fo_peep = param.layer[i].forward_param.output_peep;
+            la::imul(fo_peep, 1.0 / rnndrop_prob);
+
+            auto& bi_peep = param.layer[i].backward_param.input_peep;
+            la::imul(bi_peep, 1.0 / rnndrop_prob);
+
+            auto& bf_peep = param.layer[i].backward_param.forget_peep;
+            la::imul(bf_peep, 1.0 / rnndrop_prob);
+
+            auto& bo_peep = param.layer[i].backward_param.output_peep;
+            la::imul(bo_peep, 1.0 / rnndrop_prob);
+        }
+    }
+
     while (1) {
         std::vector<std::vector<double>> frames;
 
@@ -80,39 +103,38 @@ void prediction_env::run()
 
         nn = make_dblstm_nn(param, frames);
 
-        if (ebt::in(std::string("rnndrop-prob"), args)) {
-            for (int ell = 0; ell < nn.layer.size(); ++ell) {
-                la::vector<double> mask_vec;
-                mask_vec.resize(param.layer[ell].forward_param.hidden_input.rows(), 1.0 / rnndrop_prob);
-
-                std::shared_ptr<autodiff::op_t> mask = nn.graph.var(mask_vec);
-
-                auto& cell_mask = nn.layer[ell].forward_feat_nn.cell_mask;
-
-                for (int i = 0; i < cell_mask.size(); ++i) {
-                    cell_mask[i] = mask;
-                }
-            }
-        }
-
         lstm::eval(nn);
 
         std::cout << i << ".phn" << std::endl;
 
-        for (int t = 0; t < nn.logprob.size(); ++t) {
-            auto& pred = autodiff::get_output<la::vector<double>>(nn.logprob.at(t));
+        if (ebt::in(std::string("logprob"), args)) {
+            for (int t = 0; t < nn.logprob.size(); ++t) {
+                auto& pred = autodiff::get_output<la::vector<double>>(nn.logprob.at(t));
 
-            int argmax = -1;
-            double max = -std::numeric_limits<double>::infinity();
+                std::cout << pred(0);
 
-            for (int j = 0; j < pred.size(); ++j) {
-                if (pred(j) > max) {
-                    max = pred(j);
-                    argmax = j;
+                for (int j = 1; j < pred.size(); ++j) {
+                    std::cout << " " << pred(j);
                 }
-            }
 
-            std::cout << label[argmax] << std::endl;
+                std::cout << std::endl;
+            }
+        } else {
+            for (int t = 0; t < nn.logprob.size(); ++t) {
+                auto& pred = autodiff::get_output<la::vector<double>>(nn.logprob.at(t));
+
+                int argmax = -1;
+                double max = -std::numeric_limits<double>::infinity();
+
+                for (int j = 0; j < pred.size(); ++j) {
+                    if (pred(j) > max) {
+                        max = pred(j);
+                        argmax = j;
+                    }
+                }
+
+                std::cout << label[argmax] << std::endl;
+            }
         }
 
         std::cout << "." << std::endl;
