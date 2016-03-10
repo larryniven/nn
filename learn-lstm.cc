@@ -151,23 +151,23 @@ void learning_env::run()
         nn = lstm::make_dblstm_nn(param, frames);
 
         if (ebt::in(std::string("rnndrop-prob"), args)) {
-            for (int ell = 0; ell < nn.layer.size(); ++ell) {
+            for (int ell = 1; ell < nn.layer.size(); ++ell) {
                 la::vector<double> mask_vec;
-                mask_vec.resize(param.layer[ell].forward_param.hidden_input.rows());
+                mask_vec.resize(param.layer[ell].forward_param.hidden_input.cols());
 
                 for (int i = 0; i < mask_vec.size(); ++i) {
                     mask_vec(i) = bernoulli(gen);
                 }
 
-                auto& f_cell_mask = nn.layer[ell].forward_feat_nn.cell_mask;
-                f_cell_mask->output = std::make_shared<la::vector<double>>(mask_vec);
+                auto& f_mask = nn.layer[ell].forward_feat_nn.input_mask;
+                f_mask->output = std::make_shared<la::vector<double>>(mask_vec);
 
                 for (int i = 0; i < mask_vec.size(); ++i) {
                     mask_vec(i) = bernoulli(gen);
                 }
 
-                auto& b_cell_mask = nn.layer[ell].backward_feat_nn.cell_mask;
-                b_cell_mask->output = std::make_shared<la::vector<double>>(mask_vec);
+                auto& b_mask = nn.layer[ell].backward_feat_nn.input_mask;
+                b_mask->output = std::make_shared<la::vector<double>>(mask_vec);
             }
         }
 

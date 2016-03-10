@@ -271,28 +271,28 @@ namespace lstm {
         result.forget_bias = g.var(p.forget_bias);
 
         la::vector<double> v;
-        v.resize(p.hidden_input.rows(), 1);
-        result.cell_mask = g.var(v);
+        v.resize(p.hidden_input.cols(), 1);
+        result.input_mask = g.var(v);
 
         result.hidden.push_back(
             autodiff::tanh(
-                autodiff::add(autodiff::mul(result.hidden_input, inputs.front()),
+                autodiff::add(autodiff::mul(result.hidden_input,
+                    autodiff::emul(inputs.front(), result.input_mask)),
                 result.hidden_bias))
         );
 
         result.input_gate.push_back(autodiff::logistic(
-            autodiff::add(autodiff::mul(result.input_input, inputs.front()),
+            autodiff::add(autodiff::mul(result.input_input,
+                autodiff::emul(inputs.front(), result.input_mask)),
             result.input_bias)));
 
-        result.cell.push_back(autodiff::emul(
-            autodiff::emul(result.input_gate.back(),
-                result.hidden.back()),
-            result.cell_mask
-        ));
+        result.cell.push_back(autodiff::emul(result.input_gate.back(),
+            result.hidden.back()));
 
         result.output_gate.push_back(autodiff::logistic(autodiff::add(
             std::vector<std::shared_ptr<autodiff::op_t>> {
-                autodiff::mul(result.output_input, inputs.front()),
+                autodiff::mul(result.output_input,
+                    autodiff::emul(inputs.front(), result.input_mask)),
                 autodiff::emul(result.output_peep, result.cell.back()),
                 result.output_bias
             })));
@@ -304,7 +304,8 @@ namespace lstm {
             result.hidden.push_back(
                 autodiff::tanh(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
-                    autodiff::mul(result.hidden_input, inputs[i]),
+                    autodiff::mul(result.hidden_input,
+                        autodiff::emul(inputs[i], result.input_mask)),
                     autodiff::mul(result.hidden_output, result.output.back()),
                     result.hidden_bias
                 }))
@@ -312,7 +313,7 @@ namespace lstm {
 
             result.input_gate.push_back(autodiff::logistic(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
-                    autodiff::mul(result.input_input, inputs[i]),
+                    autodiff::mul(result.input_input, autodiff::emul(inputs[i], result.input_mask)),
                     autodiff::mul(result.input_output, result.output.back()),
                     autodiff::emul(result.input_peep, result.cell.back()),
                     result.input_bias
@@ -320,22 +321,21 @@ namespace lstm {
 
             result.forget_gate.push_back(autodiff::logistic(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
-                    autodiff::mul(result.forget_input, inputs[i]),
+                    autodiff::mul(result.forget_input, autodiff::emul(inputs[i], result.input_mask)),
                     autodiff::mul(result.forget_output, result.output.back()),
                     autodiff::emul(result.forget_peep, result.cell.back()),
                     result.forget_bias
                 })));
 
-            result.cell.push_back(autodiff::emul(
+            result.cell.push_back(
                 autodiff::add(
                     autodiff::emul(result.forget_gate.back(), result.cell.back()),
-                    autodiff::emul(result.input_gate.back(), result.hidden.back())),
-                result.cell_mask
-            ));
+                    autodiff::emul(result.input_gate.back(), result.hidden.back()))
+            );
 
             result.output_gate.push_back(autodiff::logistic(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
-                    autodiff::mul(result.output_input, inputs[i]),
+                    autodiff::mul(result.output_input, autodiff::emul(inputs[i], result.input_mask)),
                     autodiff::mul(result.output_output, result.output.back()),
                     autodiff::emul(result.output_peep, result.cell.back()),
                     result.output_bias
