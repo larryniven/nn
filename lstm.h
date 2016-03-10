@@ -74,6 +74,7 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> forget_gate;
         std::vector<std::shared_ptr<autodiff::op_t>> output;
 
+        std::shared_ptr<autodiff::op_t> hidden_mask;
         std::shared_ptr<autodiff::op_t> cell_mask;
     };
 

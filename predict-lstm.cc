@@ -70,28 +70,6 @@ void prediction_env::run()
 {
     int i = 1;
 
-    if (ebt::in(std::string("rnndrop-prob"), args)) {
-        for (int ell = 0; ell < param.layer.size(); ++i) {
-            auto& fi_peep = param.layer[i].forward_param.input_peep;
-            la::imul(fi_peep, 1.0 / rnndrop_prob);
-
-            auto& ff_peep = param.layer[i].forward_param.forget_peep;
-            la::imul(ff_peep, 1.0 / rnndrop_prob);
-
-            auto& fo_peep = param.layer[i].forward_param.output_peep;
-            la::imul(fo_peep, 1.0 / rnndrop_prob);
-
-            auto& bi_peep = param.layer[i].backward_param.input_peep;
-            la::imul(bi_peep, 1.0 / rnndrop_prob);
-
-            auto& bf_peep = param.layer[i].backward_param.forget_peep;
-            la::imul(bf_peep, 1.0 / rnndrop_prob);
-
-            auto& bo_peep = param.layer[i].backward_param.output_peep;
-            la::imul(bo_peep, 1.0 / rnndrop_prob);
-        }
-    }
-
     while (1) {
         std::vector<std::vector<double>> frames;
 
@@ -102,6 +80,19 @@ void prediction_env::run()
         }
 
         nn = make_dblstm_nn(param, frames);
+
+        if (ebt::in(std::string("rnndrop-prob"), args)) {
+            for (int ell = 0; ell < nn.layer.size(); ++ell) {
+                la::vector<double> mask_vec;
+                mask_vec.resize(param.layer[ell].forward_param.hidden_input.rows(), rnndrop_prob);
+
+                auto& f_cell_mask = nn.layer[ell].forward_feat_nn.cell_mask;
+                f_cell_mask->output = std::make_shared<la::vector<double>>(mask_vec);
+
+                auto& b_cell_mask = nn.layer[ell].backward_feat_nn.cell_mask;
+                b_cell_mask->output = std::make_shared<la::vector<double>>(mask_vec);
+            }
+        }
 
         lstm::eval(nn);
 

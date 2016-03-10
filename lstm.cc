@@ -274,17 +274,20 @@ namespace lstm {
         v.resize(p.hidden_input.rows(), 1);
         result.cell_mask = g.var(v);
 
-        result.hidden.push_back(autodiff::tanh(
-            autodiff::add(autodiff::mul(result.hidden_input, inputs.front()),
-            result.hidden_bias)));
+        result.hidden.push_back(
+            autodiff::tanh(
+                autodiff::add(autodiff::mul(result.hidden_input, inputs.front()),
+                result.hidden_bias))
+        );
 
         result.input_gate.push_back(autodiff::logistic(
             autodiff::add(autodiff::mul(result.input_input, inputs.front()),
             result.input_bias)));
 
         result.cell.push_back(autodiff::emul(
-            result.cell_mask,
-            autodiff::emul(result.input_gate.back(), result.hidden.back())
+            autodiff::emul(result.input_gate.back(),
+                result.hidden.back()),
+            result.cell_mask
         ));
 
         result.output_gate.push_back(autodiff::logistic(autodiff::add(
@@ -298,12 +301,14 @@ namespace lstm {
             autodiff::tanh(result.cell.back())));
 
         for (int i = 1; i < inputs.size(); ++i) {
-            result.hidden.push_back(autodiff::tanh(autodiff::add(
+            result.hidden.push_back(
+                autodiff::tanh(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
                     autodiff::mul(result.hidden_input, inputs[i]),
                     autodiff::mul(result.hidden_output, result.output.back()),
                     result.hidden_bias
-                })));
+                }))
+            );
 
             result.input_gate.push_back(autodiff::logistic(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
@@ -322,10 +327,10 @@ namespace lstm {
                 })));
 
             result.cell.push_back(autodiff::emul(
-                result.cell_mask,
                 autodiff::add(
                     autodiff::emul(result.forget_gate.back(), result.cell.back()),
-                    autodiff::emul(result.input_gate.back(), result.hidden.back()))
+                    autodiff::emul(result.input_gate.back(), result.hidden.back())),
+                result.cell_mask
             ));
 
             result.output_gate.push_back(autodiff::logistic(autodiff::add(

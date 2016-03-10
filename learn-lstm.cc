@@ -225,6 +225,11 @@ void learning_env::run()
         }
 #endif
 
+        if (i % save_every == 0) {
+            lstm::save_dblstm_param(param, "param-last");
+            lstm::save_dblstm_param(opt_data, "opt-data-last");
+        }
+
 #if DEBUG_TOP
         if (i == DEBUG_TOP) {
             break;
