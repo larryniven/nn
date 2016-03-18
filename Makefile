@@ -21,10 +21,10 @@ learn: nn.o learn.o
 predict: nn.o predict.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lopt -lla -lebt -lblas
 
-learn-lstm: lstm.o learn-lstm.o
+learn-lstm: lstm.o learn-lstm.o pred.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
-predict-lstm: lstm.o predict-lstm.o
+predict-lstm: lstm.o predict-lstm.o pred.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 learn-gru: gru.o learn-gru.o
@@ -36,6 +36,7 @@ predict-gru: gru.o predict-gru.o
 nn.o: nn.h
 lstm.o: lstm.h
 gru.o: gru.h
+pred.o: pred.h
 
 libnngpu.a: nn.o nn-gpu.o
 	$(AR) rcs $@ $^

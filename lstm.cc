@@ -274,25 +274,23 @@ namespace lstm {
         v.resize(p.hidden_input.cols(), 1);
         result.input_mask = g.var(v);
 
-        result.hidden.push_back(
-            autodiff::tanh(
-                autodiff::add(autodiff::mul(result.hidden_input,
-                    autodiff::emul(inputs.front(), result.input_mask)),
+        auto input_masked = autodiff::emul(inputs.front(), result.input_mask);
+
+        result.hidden.push_back(autodiff::tanh(
+            autodiff::add(autodiff::mul(result.hidden_input, input_masked),
                 result.hidden_bias))
         );
 
         result.input_gate.push_back(autodiff::logistic(
-            autodiff::add(autodiff::mul(result.input_input,
-                autodiff::emul(inputs.front(), result.input_mask)),
-            result.input_bias)));
+            autodiff::add(autodiff::mul(result.input_input, input_masked),
+                result.input_bias)));
 
         result.cell.push_back(autodiff::emul(result.input_gate.back(),
             result.hidden.back()));
 
         result.output_gate.push_back(autodiff::logistic(autodiff::add(
             std::vector<std::shared_ptr<autodiff::op_t>> {
-                autodiff::mul(result.output_input,
-                    autodiff::emul(inputs.front(), result.input_mask)),
+                autodiff::mul(result.output_input, input_masked),
                 autodiff::emul(result.output_peep, result.cell.back()),
                 result.output_bias
             })));
@@ -301,11 +299,12 @@ namespace lstm {
             autodiff::tanh(result.cell.back())));
 
         for (int i = 1; i < inputs.size(); ++i) {
+            auto input_masked = autodiff::emul(inputs[i], result.input_mask);
+
             result.hidden.push_back(
                 autodiff::tanh(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
-                    autodiff::mul(result.hidden_input,
-                        autodiff::emul(inputs[i], result.input_mask)),
+                    autodiff::mul(result.hidden_input, input_masked),
                     autodiff::mul(result.hidden_output, result.output.back()),
                     result.hidden_bias
                 }))
@@ -313,7 +312,7 @@ namespace lstm {
 
             result.input_gate.push_back(autodiff::logistic(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
-                    autodiff::mul(result.input_input, autodiff::emul(inputs[i], result.input_mask)),
+                    autodiff::mul(result.input_input, input_masked),
                     autodiff::mul(result.input_output, result.output.back()),
                     autodiff::emul(result.input_peep, result.cell.back()),
                     result.input_bias
@@ -321,7 +320,7 @@ namespace lstm {
 
             result.forget_gate.push_back(autodiff::logistic(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
-                    autodiff::mul(result.forget_input, autodiff::emul(inputs[i], result.input_mask)),
+                    autodiff::mul(result.forget_input, input_masked),
                     autodiff::mul(result.forget_output, result.output.back()),
                     autodiff::emul(result.forget_peep, result.cell.back()),
                     result.forget_bias
@@ -335,7 +334,7 @@ namespace lstm {
 
             result.output_gate.push_back(autodiff::logistic(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
-                    autodiff::mul(result.output_input, autodiff::emul(inputs[i], result.input_mask)),
+                    autodiff::mul(result.output_input, input_masked),
                     autodiff::mul(result.output_output, result.output.back()),
                     autodiff::emul(result.output_peep, result.cell.back()),
                     result.output_bias
@@ -391,107 +390,6 @@ namespace lstm {
         result.forget_bias = autodiff::get_grad<decltype(result.forget_bias)>(nn.forget_bias);
 
         return result;
-    }
-
-    lstm_param_t load_lstm_param(std::istream& is)
-    {
-        std::string line;
-        lstm_param_t result;
-
-        result.feat_param = load_lstm_feat_param(is);
-
-        result.softmax_weight = ebt::json::json_parser<decltype(result.softmax_weight)>().parse(is);
-        std::getline(is, line);
-        result.softmax_bias = ebt::json::json_parser<decltype(result.softmax_bias)>().parse(is);
-        std::getline(is, line);
-
-        return result;
-    }
-
-    lstm_param_t load_lstm_param(std::string filename)
-    {
-        std::ifstream ifs { filename };
-        return load_lstm_param(ifs);
-    }
-
-    void save_lstm_param(lstm_param_t const& p, std::ostream& os)
-    {
-        save_lstm_feat_param(p.feat_param, os);
-
-        ebt::json::dump(p.softmax_weight, os);
-        os << std::endl;
-        ebt::json::dump(p.softmax_bias, os);
-        os << std::endl;
-    }
-
-    void save_lstm_param(lstm_param_t const& p, std::string filename)
-    {
-        std::ofstream ofs { filename };
-        save_lstm_param(p, ofs);
-    }
-
-    void adagrad_update(lstm_param_t& p, lstm_param_t const& grad,
-        lstm_param_t& opt_data, double step_size)
-    {
-        adagrad_update(p.feat_param, grad.feat_param, opt_data.feat_param, step_size);
-
-        opt::adagrad_update(p.softmax_weight, grad.softmax_weight,
-            opt_data.softmax_weight, step_size);
-        opt::adagrad_update(p.softmax_bias, grad.softmax_bias,
-            opt_data.softmax_bias, step_size);
-    }
-
-    lstm_nn_t make_lstm_nn(lstm_param_t const& p,
-        std::vector<std::vector<double>> const& frames)
-    {
-        lstm_nn_t result;
-
-        std::vector<std::shared_ptr<autodiff::op_t>> inputs;
-
-        for (int i = 0; i < frames.size(); ++i) {
-            inputs.push_back(result.graph.var(frames[i]));
-        }
-
-        result.feat_nn = make_forward_lstm_feat_nn(result.graph, p.feat_param, inputs);
-
-        result.softmax_weight = result.graph.var(p.softmax_weight);
-        result.softmax_bias = result.graph.var(p.softmax_bias);
-
-        for (int i = 0; i < result.feat_nn.output.size(); ++i) {
-            result.logprob.push_back(autodiff::logsoftmax(autodiff::add(
-                autodiff::mul(result.softmax_weight, result.feat_nn.output[i]),
-                result.softmax_bias)));
-        }
-
-        return result;
-    }
-
-    lstm_param_t copy_lstm_grad(lstm_nn_t const& nn)
-    {
-        lstm_param_t result;
-
-        result.feat_param = copy_lstm_feat_grad(nn.feat_nn);
-
-        result.softmax_weight = autodiff::get_grad<decltype(result.softmax_weight)>(nn.softmax_weight);
-        result.softmax_bias = autodiff::get_grad<decltype(result.softmax_bias)>(nn.softmax_bias);
-
-        return result;
-    }
-
-    void eval(lstm_nn_t const& nn)
-    {
-        std::vector<std::shared_ptr<autodiff::op_t>> order
-            = autodiff::topo_order(nn.logprob);
-
-        autodiff::eval(order, autodiff::eval_funcs);
-    }
-
-    void grad(lstm_nn_t const& nn)
-    {
-        std::vector<std::shared_ptr<autodiff::op_t>> order
-            = autodiff::topo_order(nn.logprob);
-
-        autodiff::grad(order, autodiff::grad_funcs);
     }
 
     blstm_feat_param_t load_blstm_feat_param(std::istream& is)
@@ -595,55 +493,6 @@ namespace lstm {
             opt_data.output_bias, decay, step_size);
     }
 
-    blstm_param_t load_blstm_param(std::istream& is)
-    {
-        std::string line;
-        blstm_param_t result;
-
-        result.feat_param = load_blstm_feat_param(is);
-
-        result.softmax_weight = ebt::json::json_parser<decltype(result.softmax_weight)>().parse(is);
-        std::getline(is, line);
-        result.softmax_bias = ebt::json::json_parser<decltype(result.softmax_bias)>().parse(is);
-        std::getline(is, line);
-
-        return result;
-    }
-
-    blstm_param_t load_blstm_param(std::string filename)
-    {
-        std::ifstream ifs { filename };
-        return load_blstm_param(ifs);
-    }
-
-    void save_blstm_param(blstm_param_t const& p, std::ostream& os)
-    {
-        save_blstm_feat_param(p.feat_param, os);
-
-        ebt::json::dump(p.softmax_weight, os);
-        os << std::endl;
-        ebt::json::dump(p.softmax_bias, os);
-        os << std::endl;
-    }
-
-    void save_blstm_param(blstm_param_t const& p, std::string filename)
-    {
-        std::ofstream ofs { filename };
-        save_blstm_param(p, ofs);
-    }
-
-    void adagrad_update(blstm_param_t& p, blstm_param_t const& grad,
-        blstm_param_t& opt_data, double step_size)
-    {
-        adagrad_update(p.feat_param, grad.feat_param,
-            opt_data.feat_param, step_size);
-
-        opt::adagrad_update(p.softmax_weight, grad.softmax_weight,
-            opt_data.softmax_weight, step_size);
-        opt::adagrad_update(p.softmax_bias, grad.softmax_bias,
-            opt_data.softmax_bias, step_size);
-    }
-
     blstm_feat_nn_t make_blstm_feat_nn(autodiff::computation_graph& g,
         blstm_feat_param_t const& p,
         std::vector<std::shared_ptr<autodiff::op_t>> const& inputs)
@@ -683,65 +532,12 @@ namespace lstm {
         return result;
     }
 
-    blstm_nn_t make_blstm_nn(blstm_param_t const& p,
-        std::vector<std::vector<double>> const& frames)
-    {
-        blstm_nn_t result;
-
-        std::vector<std::shared_ptr<autodiff::op_t>> inputs;
-
-        for (int i = 0; i < frames.size(); ++i) {
-            inputs.push_back(result.graph.var(frames[i]));
-        }
-
-        result.feat_nn = make_blstm_feat_nn(result.graph, p.feat_param, inputs);
-
-        result.softmax_weight = result.graph.var(p.softmax_weight);
-        result.softmax_bias = result.graph.var(p.softmax_bias);
-
-        for (int i = 0; i < result.feat_nn.output.size(); ++i) {
-            result.logprob.push_back(autodiff::logsoftmax(autodiff::add(
-                autodiff::mul(result.softmax_weight, result.feat_nn.output[i]),
-                result.softmax_bias)));
-        }
-
-        return result;
-    }
-
-    blstm_param_t copy_blstm_grad(blstm_nn_t const& nn)
-    {
-        blstm_param_t result;
-
-        result.feat_param = copy_blstm_feat_grad(nn.feat_nn);
-
-        result.softmax_weight = autodiff::get_grad<decltype(result.softmax_weight)>(nn.softmax_weight);
-        result.softmax_bias = autodiff::get_grad<decltype(result.softmax_bias)>(nn.softmax_bias);
-
-        return result;
-    }
-
-    void eval(blstm_nn_t const& nn)
-    {
-        std::vector<std::shared_ptr<autodiff::op_t>> order
-            = autodiff::topo_order(nn.logprob);
-
-        autodiff::eval(order, autodiff::eval_funcs);
-    }
-
-    void grad(blstm_nn_t const& nn)
-    {
-        std::vector<std::shared_ptr<autodiff::op_t>> order
-            = autodiff::topo_order(nn.logprob);
-
-        autodiff::grad(order, autodiff::grad_funcs);
-    }
-
-    dblstm_param_t load_dblstm_param(std::istream& is)
+    dblstm_feat_param_t load_dblstm_feat_param(std::istream& is)
     {
         std::string line;
         std::getline(is, line);
 
-        dblstm_param_t result;
+        dblstm_feat_param_t result;
 
         int layer = std::stoi(line);
 
@@ -749,163 +545,91 @@ namespace lstm {
             result.layer.push_back(load_blstm_feat_param(is));
         }
 
-        result.softmax_weight = ebt::json::json_parser<decltype(result.softmax_weight)>().parse(is);
-        std::getline(is, line);
-
-        result.softmax_bias = ebt::json::json_parser<decltype(result.softmax_bias)>().parse(is);
-        std::getline(is, line);
-
         return result;
     }
 
-    dblstm_param_t load_dblstm_param(std::string filename)
+    dblstm_feat_param_t load_dblstm_feat_param(std::string filename)
     {
         std::ifstream ifs { filename };
-        return load_dblstm_param(ifs);
+        return load_dblstm_feat_param(ifs);
     }
 
-    void save_dblstm_param(dblstm_param_t const& p, std::ostream& os)
+    void save_dblstm_feat_param(dblstm_feat_param_t const& p, std::ostream& os)
     {
         os << p.layer.size() << std::endl;
 
         for (auto& ell: p.layer) {
             save_blstm_feat_param(ell, os);
         }
-
-        ebt::json::dump(p.softmax_weight, os);
-        os << std::endl;
-        ebt::json::dump(p.softmax_bias, os);
-        os << std::endl;
     }
 
-    void save_dblstm_param(dblstm_param_t const& p, std::string filename)
+    void save_dblstm_feat_param(dblstm_feat_param_t const& p, std::string filename)
     {
         std::ofstream ofs { filename };
-        save_dblstm_param(p, ofs);
+        save_dblstm_feat_param(p, ofs);
     }
 
-    void bound(dblstm_param_t& p, double min, double max)
+    void bound(dblstm_feat_param_t& p, double min, double max)
     {
         for (int i = 0; i < p.layer.size(); ++i) {
             bound(p.layer[i], min, max);
         }
-
-        bound(p.softmax_weight, min, max);
-        bound(p.softmax_bias, min, max);
     }
 
-    void const_step_update_momentum(dblstm_param_t& p, dblstm_param_t const& grad,
-        dblstm_param_t& opt_data, double momentum, double step_size)
+    void const_step_update_momentum(dblstm_feat_param_t& p, dblstm_feat_param_t const& grad,
+        dblstm_feat_param_t& opt_data, double momentum, double step_size)
     {
         for (int i = 0; i < p.layer.size(); ++i) {
             const_step_update_momentum(p.layer[i], grad.layer[i],
                 opt_data.layer[i], momentum, step_size);
         }
-
-        opt::const_step_update_momentum(p.softmax_weight, grad.softmax_weight,
-            opt_data.softmax_weight, momentum, step_size);
-        opt::const_step_update_momentum(p.softmax_bias, grad.softmax_bias,
-            opt_data.softmax_bias, momentum, step_size);
     }
 
-    void adagrad_update(dblstm_param_t& p, dblstm_param_t const& grad,
-        dblstm_param_t& opt_data, double step_size)
+    void adagrad_update(dblstm_feat_param_t& p, dblstm_feat_param_t const& grad,
+        dblstm_feat_param_t& opt_data, double step_size)
     {
         for (int i = 0; i < p.layer.size(); ++i) {
             adagrad_update(p.layer[i], grad.layer[i],
                 opt_data.layer[i], step_size);
         }
-
-        opt::adagrad_update(p.softmax_weight, grad.softmax_weight,
-            opt_data.softmax_weight, step_size);
-        opt::adagrad_update(p.softmax_bias, grad.softmax_bias,
-            opt_data.softmax_bias, step_size);
     }
 
-    void rmsprop_update(dblstm_param_t& p, dblstm_param_t const& grad,
-        dblstm_param_t& opt_data, double decay, double step_size)
+    void rmsprop_update(dblstm_feat_param_t& p, dblstm_feat_param_t const& grad,
+        dblstm_feat_param_t& opt_data, double decay, double step_size)
     {
         for (int i = 0; i < p.layer.size(); ++i) {
             rmsprop_update(p.layer[i], grad.layer[i],
                 opt_data.layer[i], decay, step_size);
         }
-
-        opt::rmsprop_update(p.softmax_weight, grad.softmax_weight,
-            opt_data.softmax_weight, decay, step_size);
-        opt::rmsprop_update(p.softmax_bias, grad.softmax_bias,
-            opt_data.softmax_bias, decay, step_size);
     }
 
-    dblstm_nn_t make_dblstm_nn(dblstm_param_t const& p,
-        std::vector<std::vector<double>> const& frames)
+    dblstm_feat_nn_t make_dblstm_feat_nn(autodiff::computation_graph& graph,
+        dblstm_feat_param_t const& p,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& inputs)
     {
-        dblstm_nn_t result;
-
-        std::vector<std::shared_ptr<autodiff::op_t>> inputs;
-
-        for (int i = 0; i < frames.size(); ++i) {
-            inputs.push_back(result.graph.var(la::vector<double>(frames[i])));
-        }
+        dblstm_feat_nn_t result;
 
         for (int i = 0; i < p.layer.size(); ++i) {
             if (i == 0) {
-                result.layer.push_back(make_blstm_feat_nn(result.graph, p.layer[0], inputs));
+                result.layer.push_back(make_blstm_feat_nn(graph, p.layer[0], inputs));
             } else {
-                result.layer.push_back(make_blstm_feat_nn(result.graph, p.layer[i],
+                result.layer.push_back(make_blstm_feat_nn(graph, p.layer[i],
                     result.layer[i-1].output));
             }
-        }
-
-        result.softmax_weight = result.graph.var(p.softmax_weight);
-        result.softmax_bias = result.graph.var(p.softmax_bias);
-
-        for (int i = 0; i < result.layer.back().output.size(); ++i) {
-            result.logprob.push_back(autodiff::logsoftmax(autodiff::add(
-                autodiff::mul(result.softmax_weight, result.layer.back().output[i]),
-                result.softmax_bias)));
         }
 
         return result;
     }
 
-    dblstm_param_t copy_dblstm_grad(dblstm_nn_t const& nn)
+    dblstm_feat_param_t copy_dblstm_feat_grad(dblstm_feat_nn_t const& nn)
     {
-        dblstm_param_t result;
+        dblstm_feat_param_t result;
 
         for (int i = 0; i < nn.layer.size(); ++i) {
             result.layer.push_back(copy_blstm_feat_grad(nn.layer[i]));
         }
 
-        result.softmax_weight = autodiff::get_grad<la::matrix<double>>(nn.softmax_weight);
-        result.softmax_bias = autodiff::get_grad<la::vector<double>>(nn.softmax_bias);
-
         return result;
-    }
-
-    void eval(dblstm_nn_t const& nn)
-    {
-        std::vector<std::shared_ptr<autodiff::op_t>> order
-            = autodiff::topo_order(nn.logprob);
-
-        autodiff::eval(order, autodiff::eval_funcs);
-    }
-
-    void grad(dblstm_nn_t const& nn)
-    {
-        std::vector<std::shared_ptr<autodiff::op_t>> order
-            = autodiff::topo_order(nn.logprob);
-
-        autodiff::grad(order, autodiff::grad_funcs);
-    }
-
-    double log_loss::loss()
-    {
-        return -la::dot(gold, pred);
-    }
-
-    la::vector<double> log_loss::grad()
-    {
-        return la::mul(gold, -1);
     }
 
 }

@@ -1,18 +1,22 @@
 #include "ebt/ebt.h"
 #include "speech/speech.h"
 #include "nn/lstm.h"
+#include "nn/pred.h"
 #include <fstream>
 
 struct prediction_env {
 
     std::ifstream frame_batch;
 
-    lstm::dblstm_param_t param;
-    lstm::dblstm_nn_t nn;
+    lstm::dblstm_feat_param_t param;
+    lstm::dblstm_feat_nn_t nn;
+    rnn::pred_param_t pred_param;
+    rnn::pred_nn_t pred_nn;
 
     std::vector<std::string> label;
 
     double rnndrop_prob;
+    int subsample_freq;
 
     std::unordered_map<std::string, std::string> args;
 
@@ -32,7 +36,8 @@ int main(int argc, char *argv[])
             {"param", "", true},
             {"label", "", true},
             {"rnndrop-prob", "", false},
-            {"logprob", "", false}
+            {"logprob", "", false},
+            {"subsample-freq", "", false}
         }
     };
 
@@ -57,12 +62,20 @@ prediction_env::prediction_env(std::unordered_map<std::string, std::string> args
 {
     frame_batch.open(args.at("frame-batch"));
 
-    param = lstm::load_dblstm_param(args.at("param"));
+    std::ifstream param_ifs { args.at("param") };
+    param = lstm::load_dblstm_feat_param(param_ifs);
+    pred_param = rnn::load_pred_param(param_ifs);
+    param_ifs.close();
 
     label = speech::load_label_set(args.at("label"));
 
     if (ebt::in(std::string("rnndrop-prob"), args)) {
         rnndrop_prob = std::stod(args.at("rnndrop-prob"));
+    }
+
+    subsample_freq = 1;
+    if (ebt::in(std::string("subsample-freq"), args)) {
+        subsample_freq = std::stoi(args.at("subsample-freq"));
     }
 }
 
@@ -79,7 +92,17 @@ void prediction_env::run()
             break;
         }
 
-        nn = make_dblstm_nn(param, frames);
+        autodiff::computation_graph graph;
+        std::vector<std::shared_ptr<autodiff::op_t>> inputs;
+
+        for (int i = 0; i < frames.size(); ++i) {
+            inputs.push_back(graph.var(la::vector<double>(frames[i])));
+        }
+
+        std::vector<std::shared_ptr<autodiff::op_t>> subsampled_inputs
+            = rnn::subsample_input(inputs, subsample_freq);
+
+        nn = lstm::make_dblstm_feat_nn(graph, param, subsampled_inputs);
 
         if (ebt::in(std::string("rnndrop-prob"), args)) {
             for (int ell = 1; ell < nn.layer.size(); ++ell) {
@@ -94,13 +117,21 @@ void prediction_env::run()
             }
         }
 
-        lstm::eval(nn);
+        pred_nn = rnn::make_pred_nn(graph, pred_param, nn.layer.back().output);
+
+        std::vector<std::shared_ptr<autodiff::op_t>> upsampled_output
+            = rnn::upsample_output(pred_nn.logprob, subsample_freq, frames.size());
+
+        assert(upsampled_output.size() == frames.size());
+
+        auto topo_order = autodiff::topo_order(upsampled_output);
+        autodiff::eval(topo_order, autodiff::eval_funcs);
 
         std::cout << i << ".phn" << std::endl;
 
         if (ebt::in(std::string("logprob"), args)) {
-            for (int t = 0; t < nn.logprob.size(); ++t) {
-                auto& pred = autodiff::get_output<la::vector<double>>(nn.logprob.at(t));
+            for (int t = 0; t < upsampled_output.size(); ++t) {
+                auto& pred = autodiff::get_output<la::vector<double>>(upsampled_output[t]);
 
                 std::cout << pred(0);
 
@@ -111,8 +142,8 @@ void prediction_env::run()
                 std::cout << std::endl;
             }
         } else {
-            for (int t = 0; t < nn.logprob.size(); ++t) {
-                auto& pred = autodiff::get_output<la::vector<double>>(nn.logprob.at(t));
+            for (int t = 0; t < upsampled_output.size(); ++t) {
+                auto& pred = autodiff::get_output<la::vector<double>>(upsampled_output[t]);
 
                 int argmax = -1;
                 double max = -std::numeric_limits<double>::infinity();
