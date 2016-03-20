@@ -115,12 +115,12 @@ namespace rnn {
 
     std::vector<std::shared_ptr<autodiff::op_t>> subsample_input(
         std::vector<std::shared_ptr<autodiff::op_t>> const& inputs,
-        int freq)
+        int freq, int shift)
     {
         std::vector<std::shared_ptr<autodiff::op_t>> result;
     
         for (int i = 0; i < inputs.size(); ++i) {
-            if (i % freq == 0) {
+            if (i % freq == shift) {
                 result.push_back(inputs[i]);
             }
         }
@@ -130,15 +130,15 @@ namespace rnn {
     
     std::vector<std::shared_ptr<autodiff::op_t>> upsample_output(
         std::vector<std::shared_ptr<autodiff::op_t>> const& outputs,
-        int freq, int size)
+        int freq, int shift, int size)
     {
         std::vector<std::shared_ptr<autodiff::op_t>> result;
     
-        std::shared_ptr<autodiff::op_t> c;
+        std::shared_ptr<autodiff::op_t> c = outputs.front();
         int j = 0;
     
         for (int i = 0; i < size; ++i) {
-            if (i % freq == 0) {
+            if (i % freq == shift) {
                 c = outputs[j];
                 ++j;
             }

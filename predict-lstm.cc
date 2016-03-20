@@ -17,6 +17,7 @@ struct prediction_env {
 
     double rnndrop_prob;
     int subsample_freq;
+    int subsample_shift;
 
     std::unordered_map<std::string, std::string> args;
 
@@ -37,7 +38,8 @@ int main(int argc, char *argv[])
             {"label", "", true},
             {"rnndrop-prob", "", false},
             {"logprob", "", false},
-            {"subsample-freq", "", false}
+            {"subsample-freq", "", false},
+            {"subsample-shift", "", false}
         }
     };
 
@@ -77,6 +79,11 @@ prediction_env::prediction_env(std::unordered_map<std::string, std::string> args
     if (ebt::in(std::string("subsample-freq"), args)) {
         subsample_freq = std::stoi(args.at("subsample-freq"));
     }
+
+    subsample_shift = 0;
+    if (ebt::in(std::string("subsample-shift"), args)) {
+        subsample_shift = std::stoi(args.at("subsample-shift"));
+    }
 }
 
 void prediction_env::run()
@@ -100,7 +107,7 @@ void prediction_env::run()
         }
 
         std::vector<std::shared_ptr<autodiff::op_t>> subsampled_inputs
-            = rnn::subsample_input(inputs, subsample_freq);
+            = rnn::subsample_input(inputs, subsample_freq, subsample_shift);
 
         nn = lstm::make_dblstm_feat_nn(graph, param, subsampled_inputs);
 
@@ -120,7 +127,7 @@ void prediction_env::run()
         pred_nn = rnn::make_pred_nn(graph, pred_param, nn.layer.back().output);
 
         std::vector<std::shared_ptr<autodiff::op_t>> upsampled_output
-            = rnn::upsample_output(pred_nn.logprob, subsample_freq, frames.size());
+            = rnn::upsample_output(pred_nn.logprob, subsample_freq, subsample_shift, frames.size());
 
         assert(upsampled_output.size() == frames.size());
 

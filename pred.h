@@ -52,11 +52,11 @@ namespace rnn {
 
     std::vector<std::shared_ptr<autodiff::op_t>> subsample_input(
         std::vector<std::shared_ptr<autodiff::op_t>> const& inputs,
-        int freq);
+        int freq, int shift);
     
     std::vector<std::shared_ptr<autodiff::op_t>> upsample_output(
         std::vector<std::shared_ptr<autodiff::op_t>> const& outputs,
-        int freq, int size);
+        int freq, int shift, int size);
 
 }
 
