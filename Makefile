@@ -12,7 +12,7 @@ clean:
 	-rm learn predict learn-lstm predict-lstm learn-gru predict-gru libnn.a
 	-rm learn-lstm-gpu libnngpu.a
 
-libnn.a: nn.o
+libnn.a: nn.o lstm.o pred.o
 	$(AR) rcs $@ $^
 
 learn: nn.o learn.o
