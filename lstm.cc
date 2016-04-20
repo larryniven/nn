@@ -632,4 +632,42 @@ namespace lstm {
         return result;
     }
 
+    void apply_random_mask(dblstm_feat_nn_t& nn, dblstm_feat_param_t const& param,
+        std::default_random_engine& gen, double prob)
+    {
+        std::bernoulli_distribution bernoulli { prob };
+
+        for (int ell = 1; ell < nn.layer.size(); ++ell) {
+            la::vector<double> mask_vec;
+            mask_vec.resize(param.layer[ell].forward_param.hidden_input.cols());
+
+            for (int i = 0; i < mask_vec.size(); ++i) {
+                mask_vec(i) = bernoulli(gen);
+            }
+
+            auto& f_mask = nn.layer[ell].forward_feat_nn.input_mask;
+            f_mask->output = std::make_shared<la::vector<double>>(mask_vec);
+
+            for (int i = 0; i < mask_vec.size(); ++i) {
+                mask_vec(i) = bernoulli(gen);
+            }
+
+            auto& b_mask = nn.layer[ell].backward_feat_nn.input_mask;
+            b_mask->output = std::make_shared<la::vector<double>>(mask_vec);
+        }
+    }
+
+    void apply_mask(dblstm_feat_nn_t& nn, dblstm_feat_param_t const& param, double prob)
+    {
+        for (int ell = 1; ell < nn.layer.size(); ++ell) {
+            la::vector<double> mask_vec;
+            mask_vec.resize(param.layer[ell].forward_param.hidden_input.cols(), prob);
+
+            auto& f_mask = nn.layer[ell].forward_feat_nn.input_mask;
+            f_mask->output = std::make_shared<la::vector<double>>(mask_vec);
+
+            auto& b_mask = nn.layer[ell].backward_feat_nn.input_mask;
+            b_mask->output = std::make_shared<la::vector<double>>(mask_vec);
+        }
+    }
 }

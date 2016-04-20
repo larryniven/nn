@@ -3,6 +3,7 @@
 
 #include "la/la.h"
 #include "autodiff/autodiff.h"
+#include <random>
 
 namespace lstm {
 
@@ -161,6 +162,11 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> const& inputs);
 
     dblstm_feat_param_t copy_dblstm_feat_grad(dblstm_feat_nn_t const& nn);
+
+    void apply_random_mask(dblstm_feat_nn_t& nn, dblstm_feat_param_t const& param,
+        std::default_random_engine& gen, double prob);
+
+    void apply_mask(dblstm_feat_nn_t& nn, dblstm_feat_param_t const& param, double prob);
 
 }
 

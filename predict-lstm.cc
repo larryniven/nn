@@ -112,16 +112,7 @@ void prediction_env::run()
         nn = lstm::make_dblstm_feat_nn(graph, param, subsampled_inputs);
 
         if (ebt::in(std::string("rnndrop-prob"), args)) {
-            for (int ell = 1; ell < nn.layer.size(); ++ell) {
-                la::vector<double> mask_vec;
-                mask_vec.resize(param.layer[ell].forward_param.hidden_input.cols(), rnndrop_prob);
-
-                auto& f_mask = nn.layer[ell].forward_feat_nn.input_mask;
-                f_mask->output = std::make_shared<la::vector<double>>(mask_vec);
-
-                auto& b_mask = nn.layer[ell].backward_feat_nn.input_mask;
-                b_mask->output = std::make_shared<la::vector<double>>(mask_vec);
-            }
+            lstm::apply_mask(nn, param, rnndrop_prob);
         }
 
         pred_nn = rnn::make_pred_nn(graph, pred_param, nn.layer.back().output);
