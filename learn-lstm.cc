@@ -39,6 +39,8 @@ struct learning_env {
 
     std::unordered_map<std::string, int> label_id;
 
+    std::unordered_set<std::string> ignored;
+
     int seed;
 
     std::unordered_map<std::string, std::string> args;
@@ -69,7 +71,8 @@ int main(int argc, char *argv[])
             {"label", "", true},
             {"rnndrop-seed", "", false},
             {"subsample-freq", "", false},
-            {"subsample-shift", "", false}
+            {"subsample-shift", "", false},
+            {"ignored", "", false}
         }
     };
 
@@ -154,6 +157,11 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     if (ebt::in(std::string("subsample-shift"), args)) {
         subsample_shift = std::stoi(args.at("subsample-shift"));
     }
+
+    if (ebt::in(std::string("ignored"), args)) {
+        auto parts = ebt::split(args.at("ignored"), ",");
+        ignored.insert(parts.begin(), parts.end());
+    }
 }
 
 void learning_env::run()
@@ -208,7 +216,9 @@ void learning_env::run()
             auto& pred = autodiff::get_output<la::vector<double>>(upsampled_output[t]);
             la::vector<double> gold;
             gold.resize(label_id.size());
-            gold(label_id.at(labels[t])) = 1;
+            if (!ebt::in(labels[t], ignored)) {
+                gold(label_id.at(labels[t])) = 1;
+            }
             rnn::log_loss loss { gold, pred };
             upsampled_output[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
             if (std::isnan(loss.loss())) {
