@@ -37,6 +37,7 @@ nn.o: nn.h
 lstm.o: lstm.h
 gru.o: gru.h
 pred.o: pred.h
+residual.o: residual.h
 
 libnngpu.a: nn.o nn-gpu.o
 	$(AR) rcs $@ $^
