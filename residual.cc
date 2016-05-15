@@ -83,6 +83,14 @@ namespace residual {
         nn_param_t result;
         std::string line;
 
+        ebt::json::json_parser<la::matrix<double>> mat_parser;
+        ebt::json::json_parser<la::vector<double>> vec_parser;
+
+        result.input_weight = mat_parser.parse(is);
+        std::getline(is, line);
+        result.input_bias = vec_parser.parse(is);
+        std::getline(is, line);
+
         std::getline(is, line);
         int layers = std::stoi(line);
 
@@ -90,29 +98,21 @@ namespace residual {
             result.layer.push_back(load_unit_param(is));
         }
 
-        ebt::json::json_parser<la::matrix<double>> mat_parser;
-        ebt::json::json_parser<la::vector<double>> vec_parser;
-
-        mat_parser.parse(is);
-        std::getline(is, line);
-        vec_parser.parse(is);
-        std::getline(is, line);
-
         return result;
     }
 
     void save_nn_param(nn_param_t const& p, std::ostream& os)
     {
+        ebt::json::dump(p.input_weight, os);
+        os << std::endl;
+        ebt::json::dump(p.input_bias, os);
+        os << std::endl;
+
         os << p.layer.size() << std::endl;
 
         for (int i = 0; i < p.layer.size(); ++i) {
             save_unit_param(p.layer[i], os);
         }
-
-        ebt::json::dump(p.input_weight, os);
-        os << std::endl;
-        ebt::json::dump(p.input_bias, os);
-        os << std::endl;
     }
 
     void adagrad_update(nn_param_t& param, nn_param_t const& grad,
