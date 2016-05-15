@@ -123,6 +123,11 @@ namespace residual {
         opt::adagrad_update(param.input_bias, grad.input_bias, accu_grad_sq.input_bias, step_size);
     }
 
+    nn_t make_nn(autodiff::computation_graph& graph,
+        nn_param_t const& param)
+    {
+    }
+
     nn_param_t copy_nn_grad(nn_t const& nn)
     {
         nn_param_t result;

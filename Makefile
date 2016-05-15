@@ -33,6 +33,9 @@ learn-gru: gru.o learn-gru.o
 predict-gru: gru.o predict-gru.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
+learn-residual: learn-residual.o residual.o pred.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
 nn.o: nn.h
 lstm.o: lstm.h
 gru.o: gru.h
