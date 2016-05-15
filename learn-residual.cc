@@ -7,6 +7,7 @@
 #include "opt/opt.h"
 #include "nn/residual.h"
 #include "nn/pred.h"
+#include "nn/nn.h"
 
 struct learning_env {
 
@@ -16,11 +17,11 @@ struct learning_env {
     residual::nn_param_t param;
     residual::nn_param_t opt_data;
 
-    rnn::pred_param_t pred_param;
-    rnn::pred_param_t pred_opt_data;
+    nn::pred_param_t pred_param;
+    nn::pred_param_t pred_opt_data;
 
     residual::nn_t nn;
-    rnn::pred_nn_t pred_nn;
+    nn::pred_nn_t pred_nn;
 
     double step_size;
 
@@ -84,12 +85,12 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
 
     std::ifstream param_ifs { args.at("param") };
     param = residual::load_nn_param(param_ifs);
-    pred_param = rnn::load_pred_param(param_ifs);
+    pred_param = nn::load_pred_param(param_ifs);
     param_ifs.close();
 
     std::ifstream opt_data_ifs { args.at("opt-data") };
     opt_data = residual::load_nn_param(opt_data_ifs);
-    pred_opt_data = rnn::load_pred_param(opt_data_ifs);
+    pred_opt_data = nn::load_pred_param(opt_data_ifs);
     opt_data_ifs.close();
 
     if (ebt::in(std::string("save-every"), args)) {
@@ -140,20 +141,34 @@ void learning_env::run()
 
         autodiff::computation_graph graph;
         nn = residual::make_nn(graph, param);
+        pred_nn = nn::make_pred_nn(graph, nn.layer.back().output, pred_param);
 
         double loss_sum = 0;
         double nframes = 0;
 
         for (int t = 0; t < frames.size(); ++t) {
-            /*
-            auto& pred = autodiff::get_output<la::vector<double>>(upsampled_output[t]);
+            std::vector<double> input;
+
+            for (int k = -5; k <= 5; ++k) {
+                if (0 <= k + t && k + t < frames.size()) {
+                    input.insert(input.end(), frames[k + t].begin(), frames[k + t].end());
+                } else {
+                    input.resize(input.size() + frames.front().size());
+                }
+            }
+
+            nn.input->output = std::make_shared<la::vector<double>>(la::vector<double> { std::move(input) });
+            autodiff::eval(pred_nn.logprob, autodiff::eval_funcs);
+
+            auto& pred = autodiff::get_output<la::vector<double>>(pred_nn.logprob);
             la::vector<double> gold;
             gold.resize(label_id.size());
             if (!ebt::in(labels[t], ignored)) {
                 gold(label_id.at(labels[t])) = 1;
             }
-            rnn::log_loss loss { gold, pred };
-            upsampled_output[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
+            nn::log_loss loss { gold, pred };
+            pred_nn.logprob->grad = std::make_shared<la::vector<double>>(loss.grad());
+
             if (std::isnan(loss.loss())) {
                 std::cerr << "loss is nan" << std::endl;
                 exit(1);
@@ -162,24 +177,28 @@ void learning_env::run()
                 nframes += 1;
             }
 
-            std::cout << "loss: " << loss_sum / nframes << std::endl;
+            autodiff::grad(pred_nn.logprob, autodiff::grad_funcs);
 
-            autodiff::grad(topo_order, autodiff::grad_funcs);
+            residual::nn_param_t grad = residual::copy_nn_grad(nn);
+            nn::pred_param_t pred_grad = nn::copy_grad(pred_nn);
 
             residual::adagrad_update(param, grad, opt_data, step_size);
-            rnn::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
-            */
+            nn::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
+
+            autodiff::clear_grad(pred_nn.logprob);
         }
+
+        std::cout << "loss: " << loss_sum / nframes << std::endl;
 
         if (i % save_every == 0) {
             std::ofstream param_ofs { "param-last" };
             residual::save_nn_param(param, param_ofs);
-            rnn::save_pred_param(pred_param, param_ofs);
+            nn::save_pred_param(pred_param, param_ofs);
             param_ofs.close();
 
             std::ofstream opt_data_ofs { "opt-data-last" };
             residual::save_nn_param(opt_data, opt_data_ofs);
-            rnn::save_pred_param(pred_opt_data, opt_data_ofs);
+            nn::save_pred_param(pred_opt_data, opt_data_ofs);
             opt_data_ofs.close();
         }
 
@@ -194,12 +213,12 @@ void learning_env::run()
 
     std::ofstream param_ofs { output_param };
     residual::save_nn_param(param, param_ofs);
-    rnn::save_pred_param(pred_param, param_ofs);
+    nn::save_pred_param(pred_param, param_ofs);
     param_ofs.close();
 
     std::ofstream opt_data_ofs { output_opt_data };
     residual::save_nn_param(opt_data, opt_data_ofs);
-    rnn::save_pred_param(pred_opt_data, opt_data_ofs);
+    nn::save_pred_param(pred_opt_data, opt_data_ofs);
     opt_data_ofs.close();
 }
 

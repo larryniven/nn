@@ -7,6 +7,7 @@
 #include "opt/opt.h"
 #include "nn/lstm.h"
 #include "nn/pred.h"
+#include "nn/nn.h"
 #include <random>
 
 struct learning_env {
@@ -17,8 +18,8 @@ struct learning_env {
     lstm::dblstm_feat_param_t param;
     lstm::dblstm_feat_param_t opt_data;
 
-    rnn::pred_param_t pred_param;
-    rnn::pred_param_t pred_opt_data;
+    nn::pred_param_t pred_param;
+    nn::pred_param_t pred_opt_data;
 
     lstm::dblstm_feat_nn_t nn;
     rnn::pred_nn_t pred_nn;
@@ -100,12 +101,12 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
 
     std::ifstream param_ifs { args.at("param") };
     param = lstm::load_dblstm_feat_param(param_ifs);
-    pred_param = rnn::load_pred_param(param_ifs);
+    pred_param = nn::load_pred_param(param_ifs);
     param_ifs.close();
 
     std::ifstream opt_data_ifs { args.at("opt-data") };
     opt_data = lstm::load_dblstm_feat_param(opt_data_ifs);
-    pred_opt_data = rnn::load_pred_param(opt_data_ifs);
+    pred_opt_data = nn::load_pred_param(opt_data_ifs);
     opt_data_ifs.close();
 
     if (ebt::in(std::string("save-every"), args)) {
@@ -219,7 +220,7 @@ void learning_env::run()
             if (!ebt::in(labels[t], ignored)) {
                 gold(label_id.at(labels[t])) = 1;
             }
-            rnn::log_loss loss { gold, pred };
+            nn::log_loss loss { gold, pred };
             upsampled_output[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
             if (std::isnan(loss.loss())) {
                 std::cerr << "loss is nan" << std::endl;
@@ -235,7 +236,7 @@ void learning_env::run()
         autodiff::grad(topo_order, autodiff::grad_funcs);
 
         lstm::dblstm_feat_param_t grad = lstm::copy_dblstm_feat_grad(nn);
-        rnn::pred_param_t pred_grad = rnn::copy_grad(pred_nn);
+        nn::pred_param_t pred_grad = rnn::copy_grad(pred_nn);
 
         lstm::bound(grad, -1, 1);
 
@@ -245,10 +246,10 @@ void learning_env::run()
             exit(1);
         } else if (ebt::in(std::string("rmsprop-decay"), args)) {
             lstm::rmsprop_update(param, grad, opt_data, rmsprop_decay, step_size);
-            rnn::rmsprop_update(pred_param, pred_grad, pred_opt_data, rmsprop_decay, step_size);
+            nn::rmsprop_update(pred_param, pred_grad, pred_opt_data, rmsprop_decay, step_size);
         } else {
             lstm::adagrad_update(param, grad, opt_data, step_size);
-            rnn::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
+            nn::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
         }
 
 #if 0
@@ -271,12 +272,12 @@ void learning_env::run()
         if (i % save_every == 0) {
             std::ofstream param_ofs { "param-last" };
             lstm::save_dblstm_feat_param(param, param_ofs);
-            rnn::save_pred_param(pred_param, param_ofs);
+            nn::save_pred_param(pred_param, param_ofs);
             param_ofs.close();
 
             std::ofstream opt_data_ofs { "opt-data-last" };
             lstm::save_dblstm_feat_param(opt_data, opt_data_ofs);
-            rnn::save_pred_param(pred_opt_data, opt_data_ofs);
+            nn::save_pred_param(pred_opt_data, opt_data_ofs);
             opt_data_ofs.close();
         }
 
@@ -291,12 +292,12 @@ void learning_env::run()
 
     std::ofstream param_ofs { output_param };
     lstm::save_dblstm_feat_param(param, param_ofs);
-    rnn::save_pred_param(pred_param, param_ofs);
+    nn::save_pred_param(pred_param, param_ofs);
     param_ofs.close();
 
     std::ofstream opt_data_ofs { output_opt_data };
     lstm::save_dblstm_feat_param(opt_data, opt_data_ofs);
-    rnn::save_pred_param(pred_opt_data, opt_data_ofs);
+    nn::save_pred_param(pred_opt_data, opt_data_ofs);
     opt_data_ofs.close();
 }
 

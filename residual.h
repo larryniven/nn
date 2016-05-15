@@ -43,6 +43,7 @@ namespace residual {
     };
 
     nn_unit_t make_unit_nn(autodiff::computation_graph& graph,
+        std::shared_ptr<autodiff::op_t> cell,
         unit_param_t const& param);
 
     unit_param_t copy_unit_grad(nn_unit_t const& unit);
@@ -64,6 +65,8 @@ namespace residual {
 
     struct nn_t {
         std::vector<nn_unit_t> layer;
+
+        std::shared_ptr<autodiff::op_t> input;
 
         std::shared_ptr<autodiff::op_t> input_weight;
         std::shared_ptr<autodiff::op_t> input_bias;

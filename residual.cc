@@ -44,6 +44,7 @@ namespace residual {
     }
 
     nn_unit_t make_unit_nn(autodiff::computation_graph& graph,
+        std::shared_ptr<autodiff::op_t> cell,
         unit_param_t const& param)
     {
         nn_unit_t result;
@@ -55,9 +56,11 @@ namespace residual {
         // result.input_weight = graph.var(param.input_weight);
         // result.input_bias = graph.var(param.input_bias);
 
+        result.cell = cell;
+
         std::shared_ptr<autodiff::op_t> h = autodiff::add(
-            autodiff::mul(result.weight1, autodiff::relu(result.cell)), result.bias1);
-        result.output = autodiff::add(result.cell,
+            autodiff::mul(result.weight1, autodiff::relu(cell)), result.bias1);
+        result.output = autodiff::add(cell,
             autodiff::add(autodiff::mul(result.weight2, autodiff::relu(h)), result.bias2));
 
         return result;
@@ -126,6 +129,21 @@ namespace residual {
     nn_t make_nn(autodiff::computation_graph& graph,
         nn_param_t const& param)
     {
+        nn_t result;
+
+        result.input = graph.var();
+        result.input_weight = graph.var(param.input_weight);
+        result.input_bias = graph.var(param.input_bias);
+
+        std::shared_ptr<autodiff::op_t> cell = autodiff::add(
+            autodiff::mul(result.input_weight, result.input), result.input_bias);
+
+        for (int i = 0; i < param.layer.size(); ++i) {
+            result.layer.push_back(make_unit_nn(graph, cell, param.layer[i]));
+            cell = result.layer.back().output;
+        }
+
+        return result;
     }
 
     nn_param_t copy_nn_grad(nn_t const& nn)

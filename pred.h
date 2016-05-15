@@ -4,7 +4,7 @@
 #include "la/la.h"
 #include "autodiff/autodiff.h"
 
-namespace rnn {
+namespace nn {
 
     struct pred_param_t {
         la::matrix<double> softmax_weight;
@@ -27,28 +27,35 @@ namespace rnn {
         std::shared_ptr<autodiff::op_t> softmax_weight;
         std::shared_ptr<autodiff::op_t> softmax_bias;
 
+        std::shared_ptr<autodiff::op_t> input;
+        std::shared_ptr<autodiff::op_t> logprob;
+    };
+
+    pred_nn_t make_pred_nn(autodiff::computation_graph& g,
+        std::shared_ptr<autodiff::op_t> input,
+        pred_param_t const& param);
+
+    pred_param_t copy_grad(pred_nn_t const& nn);
+
+}
+
+namespace rnn {
+
+    struct pred_nn_t {
+        std::shared_ptr<autodiff::op_t> softmax_weight;
+        std::shared_ptr<autodiff::op_t> softmax_bias;
+
         std::vector<std::shared_ptr<autodiff::op_t>> logprob;
     };
 
     pred_nn_t make_pred_nn(autodiff::computation_graph& g,
-        pred_param_t const& param,
+        nn::pred_param_t const& param,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat);
 
-    pred_param_t copy_grad(pred_nn_t const& nn);
+    nn::pred_param_t copy_grad(pred_nn_t const& nn);
 
     void eval(pred_nn_t& nn);
     void grad(pred_nn_t& nn);
-
-    struct log_loss {
-
-        la::vector<double> gold;
-        la::vector<double> pred;
-
-        double loss();
-
-        la::vector<double> grad();
-
-    };
 
     std::vector<std::shared_ptr<autodiff::op_t>> subsample_input(
         std::vector<std::shared_ptr<autodiff::op_t>> const& inputs,

@@ -2,7 +2,7 @@
 #include <fstream>
 #include "opt/opt.h"
 
-namespace rnn {
+namespace nn {
 
     pred_param_t load_pred_param(std::istream& is)
     {
@@ -61,7 +61,34 @@ namespace rnn {
     }
 
     pred_nn_t make_pred_nn(autodiff::computation_graph& g,
-        pred_param_t const& param,
+        std::shared_ptr<autodiff::op_t> input,
+        pred_param_t const& param)
+    {
+        pred_nn_t result;
+
+        result.input = input;
+        result.logprob = autodiff::logsoftmax(
+            autodiff::add(autodiff::mul(result.softmax_weight, result.input), result.softmax_bias));
+
+        return result;
+    }
+
+    pred_param_t copy_grad(pred_nn_t const& nn)
+    {
+        pred_param_t result;
+
+        result.softmax_weight = autodiff::get_grad<la::matrix<double>>(nn.softmax_weight);
+        result.softmax_bias = autodiff::get_grad<la::vector<double>>(nn.softmax_bias);
+
+        return result;
+    }
+
+}
+
+namespace rnn {
+
+    pred_nn_t make_pred_nn(autodiff::computation_graph& g,
+        nn::pred_param_t const& param,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat)
     {
         pred_nn_t result;
@@ -77,9 +104,9 @@ namespace rnn {
         return result;
     }
 
-    pred_param_t copy_grad(pred_nn_t const& nn)
+    nn::pred_param_t copy_grad(pred_nn_t const& nn)
     {
-        pred_param_t result;
+        nn::pred_param_t result;
 
         result.softmax_weight = autodiff::get_grad<la::matrix<double>>(nn.softmax_weight);
         result.softmax_bias = autodiff::get_grad<la::vector<double>>(nn.softmax_bias);
@@ -101,16 +128,6 @@ namespace rnn {
             = autodiff::topo_order(nn.logprob);
 
         autodiff::grad(order, autodiff::grad_funcs);
-    }
-
-    double log_loss::loss()
-    {
-        return -la::dot(gold, pred);
-    }
-
-    la::vector<double> log_loss::grad()
-    {
-        return la::mul(gold, -1);
     }
 
     std::vector<std::shared_ptr<autodiff::op_t>> subsample_input(

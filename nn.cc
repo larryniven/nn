@@ -259,5 +259,6 @@ namespace nn {
     {
         return la::mul(gold, -1);
     }
+
 }
 

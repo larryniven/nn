@@ -3,13 +3,23 @@ AR = gcc-ar
 
 .PHONY: all clean gpu
 
-all: learn predict learn-lstm predict-lstm learn-gru predict-gru libnn.a
+bin = \
+    learn \
+    predict \
+    learn-lstm \
+    predict-lstm \
+    learn-gru \
+    predict-gru \
+    learn-residual \
+    libnn.a
+
+all: $(bin)
 
 gpu: learn-gpu learn-lstm-gpu libnngpu.a
 
 clean:
 	-rm *.o
-	-rm learn predict learn-lstm predict-lstm learn-gru predict-gru libnn.a
+	-rm $(bin)
 	-rm learn-lstm-gpu libnngpu.a
 
 libnn.a: nn.o lstm.o pred.o
@@ -21,7 +31,7 @@ learn: nn.o learn.o
 predict: nn.o predict.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lopt -lla -lebt -lblas
 
-learn-lstm: lstm.o learn-lstm.o pred.o
+learn-lstm: lstm.o learn-lstm.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 predict-lstm: lstm.o predict-lstm.o pred.o
@@ -33,7 +43,7 @@ learn-gru: gru.o learn-gru.o
 predict-gru: gru.o predict-gru.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
-learn-residual: learn-residual.o residual.o pred.o
+learn-residual: learn-residual.o residual.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 nn.o: nn.h
