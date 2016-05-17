@@ -66,6 +66,9 @@ namespace nn {
     {
         pred_nn_t result;
 
+        result.softmax_weight = g.var(param.softmax_weight);
+        result.softmax_bias = g.var(param.softmax_bias);
+
         result.input = input;
         result.logprob = autodiff::logsoftmax(
             autodiff::add(autodiff::mul(result.softmax_weight, result.input), result.softmax_bias));

@@ -10,7 +10,7 @@ struct prediction_env {
 
     lstm::dblstm_feat_param_t param;
     lstm::dblstm_feat_nn_t nn;
-    rnn::pred_param_t pred_param;
+    nn::pred_param_t pred_param;
     rnn::pred_nn_t pred_nn;
 
     std::vector<std::string> label;
@@ -66,7 +66,7 @@ prediction_env::prediction_env(std::unordered_map<std::string, std::string> args
 
     std::ifstream param_ifs { args.at("param") };
     param = lstm::load_dblstm_feat_param(param_ifs);
-    pred_param = rnn::load_pred_param(param_ifs);
+    pred_param = nn::load_pred_param(param_ifs);
     param_ifs.close();
 
     label = speech::load_label_set(args.at("label"));

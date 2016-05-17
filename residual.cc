@@ -45,14 +45,14 @@ namespace residual {
 
     nn_unit_t make_unit_nn(autodiff::computation_graph& graph,
         std::shared_ptr<autodiff::op_t> cell,
-        unit_param_t const& param)
+        unit_param_t& param)
     {
         nn_unit_t result;
 
-        result.weight1 = graph.var(param.weight1);
-        result.bias1 = graph.var(param.bias1);
-        result.weight2 = graph.var(param.weight2);
-        result.bias2 = graph.var(param.bias2);
+        result.weight1 = graph.var(la::weak_matrix<double>(param.weight1));
+        result.bias1 = graph.var(la::weak_vector<double>(param.bias1));
+        result.weight2 = graph.var(la::weak_matrix<double>(param.weight2));
+        result.bias2 = graph.var(la::weak_vector<double>(param.bias2));
         // result.input_weight = graph.var(param.input_weight);
         // result.input_bias = graph.var(param.input_bias);
 
@@ -64,6 +64,22 @@ namespace residual {
             autodiff::add(autodiff::mul(result.weight2, autodiff::relu(h)), result.bias2));
 
         return result;
+    }
+
+    void unit_nn_tie_grad(nn_unit_t& nn, unit_param_t& grad)
+    {
+        nn.weight1->grad = std::make_shared<la::weak_matrix<double>>(grad.weight1);
+        nn.bias1->grad = std::make_shared<la::weak_vector<double>>(grad.bias1);
+        nn.weight2->grad = std::make_shared<la::weak_matrix<double>>(grad.weight2);
+        nn.bias2->grad = std::make_shared<la::weak_vector<double>>(grad.bias2);
+    }
+
+    void resize_as(unit_param_t& p1, unit_param_t const& p2)
+    {
+        p1.weight1.resize(p2.weight1.rows(), p2.weight1.cols());
+        p1.bias1.resize(p2.bias1.size());
+        p1.weight2.resize(p2.weight2.rows(), p2.weight2.cols());
+        p1.bias2.resize(p2.bias2.size());
     }
 
     unit_param_t copy_unit_grad(nn_unit_t const& unit)
@@ -127,7 +143,7 @@ namespace residual {
     }
 
     nn_t make_nn(autodiff::computation_graph& graph,
-        nn_param_t const& param)
+        nn_param_t& param)
     {
         nn_t result;
 
@@ -146,16 +162,37 @@ namespace residual {
         return result;
     }
 
+    void nn_tie_grad(nn_t& nn, nn_param_t& grad)
+    {
+        nn.input_weight->grad = std::make_shared<la::weak_matrix<double>>(grad.input_weight);
+        nn.input_bias->grad = std::make_shared<la::weak_vector<double>>(grad.input_bias);
+
+        for (int i = 0; i < grad.layer.size(); ++i) {
+            unit_nn_tie_grad(nn.layer[i], grad.layer[i]);
+        }
+    }
+
+    void resize_as(nn_param_t& p1, nn_param_t const& p2)
+    {
+        p1.input_weight.resize(p2.input_weight.rows(), p2.input_weight.cols());
+        p1.input_bias.resize(p2.input_bias.size());
+
+        p1.layer.resize(p2.layer.size());
+        for (int i = 0; i < p2.layer.size(); ++i) {
+            resize_as(p1.layer[i], p2.layer[i]);
+        }
+    }
+
     nn_param_t copy_nn_grad(nn_t const& nn)
     {
         nn_param_t result;
 
+        result.input_weight = autodiff::get_grad<la::matrix<double>>(nn.input_weight);
+        result.input_bias = autodiff::get_grad<la::vector<double>>(nn.input_bias);
+
         for (int i = 0; i < nn.layer.size(); ++i) {
             result.layer.push_back(copy_unit_grad(nn.layer[i]));
         }
-
-        result.input_weight = autodiff::get_grad<la::matrix<double>>(nn.input_weight);
-        result.input_bias = autodiff::get_grad<la::vector<double>>(nn.input_bias);
 
         return result;
     }

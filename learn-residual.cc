@@ -8,6 +8,8 @@
 #include "nn/residual.h"
 #include "nn/pred.h"
 #include "nn/nn.h"
+#include <random>
+#include <algorithm>
 
 struct learning_env {
 
@@ -126,6 +128,11 @@ void learning_env::run()
 {
     int i = 1;
 
+    std::default_random_engine gen;
+
+    residual::nn_param_t zero_grad;
+    residual::resize_as(zero_grad, param);
+
     while (1) {
         std::vector<std::vector<double>> frames;
 
@@ -139,14 +146,28 @@ void learning_env::run()
             break;
         }
 
-        autodiff::computation_graph graph;
-        nn = residual::make_nn(graph, param);
-        pred_nn = nn::make_pred_nn(graph, nn.layer.back().output, pred_param);
+        std::vector<int> indices;
+        indices.resize(frames.size());
+        for (int j = 0; j < frames.size(); ++j) {
+            indices[j] = j;
+        }
+        std::shuffle(indices.begin(), indices.end(), gen);
 
         double loss_sum = 0;
         double nframes = 0;
 
-        for (int t = 0; t < frames.size(); ++t) {
+        for (int j = 0; j < indices.size(); ++j) {
+            int t = indices[j];
+
+            if (ebt::in(labels[t], ignored)) {
+                continue;
+            }
+
+            autodiff::computation_graph graph;
+
+            nn = residual::make_nn(graph, param);
+            pred_nn = nn::make_pred_nn(graph, nn.layer.back().output, pred_param);
+
             std::vector<double> input;
 
             for (int k = -5; k <= 5; ++k) {
@@ -166,7 +187,7 @@ void learning_env::run()
             if (!ebt::in(labels[t], ignored)) {
                 gold(label_id.at(labels[t])) = 1;
             }
-            nn::log_loss loss { gold, pred };
+            nn::log_loss loss { pred, gold };
             pred_nn.logprob->grad = std::make_shared<la::vector<double>>(loss.grad());
 
             if (std::isnan(loss.loss())) {
@@ -177,15 +198,15 @@ void learning_env::run()
                 nframes += 1;
             }
 
+            residual::nn_param_t grad = zero_grad;
+            residual::nn_tie_grad(nn, grad);
+
             autodiff::grad(pred_nn.logprob, autodiff::grad_funcs);
 
-            residual::nn_param_t grad = residual::copy_nn_grad(nn);
             nn::pred_param_t pred_grad = nn::copy_grad(pred_nn);
 
             residual::adagrad_update(param, grad, opt_data, step_size);
             nn::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
-
-            autodiff::clear_grad(pred_nn.logprob);
         }
 
         std::cout << "loss: " << loss_sum / nframes << std::endl;

@@ -44,7 +44,11 @@ namespace residual {
 
     nn_unit_t make_unit_nn(autodiff::computation_graph& graph,
         std::shared_ptr<autodiff::op_t> cell,
-        unit_param_t const& param);
+        unit_param_t& param);
+
+    void unit_nn_tie_grad(nn_unit_t& nn, unit_param_t& grad);
+
+    void resize_as(unit_param_t& p1, unit_param_t const& p2);
 
     unit_param_t copy_unit_grad(nn_unit_t const& unit);
 
@@ -64,16 +68,20 @@ namespace residual {
         nn_param_t& accu_grad_sq, double step_size);
 
     struct nn_t {
-        std::vector<nn_unit_t> layer;
-
         std::shared_ptr<autodiff::op_t> input;
 
         std::shared_ptr<autodiff::op_t> input_weight;
         std::shared_ptr<autodiff::op_t> input_bias;
+
+        std::vector<nn_unit_t> layer;
     };
 
     nn_t make_nn(autodiff::computation_graph& graph,
-        nn_param_t const& param);
+        nn_param_t& param);
+
+    void nn_tie_grad(nn_t& nn, nn_param_t& grad);
+
+    void resize_as(nn_param_t& p1, nn_param_t const& p2);
 
     nn_param_t copy_nn_grad(nn_t const& nn);
 
