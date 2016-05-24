@@ -22,7 +22,7 @@ clean:
 	-rm $(bin)
 	-rm learn-lstm-gpu libnngpu.a
 
-libnn.a: nn.o lstm.o pred.o
+libnn.a: nn.o lstm.o pred.o residual.o
 	$(AR) rcs $@ $^
 
 learn: nn.o learn.o

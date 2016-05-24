@@ -24,11 +24,17 @@ namespace residual {
         // la::vector<double> input_bias;
     };
 
+    void imul(unit_param_t& p, double a);
+    void iadd(unit_param_t& p1, unit_param_t const& p2);
+
     unit_param_t load_unit_param(std::istream& is);
     void save_unit_param(unit_param_t const& p, std::ostream& os);
 
     void adagrad_update(unit_param_t& param, unit_param_t const& grad,
         unit_param_t& accu_grad_sq, double step_size);
+
+    void rmsprop_update(unit_param_t& param, unit_param_t const& grad,
+        unit_param_t& opt_data, double decay, double step_size);
 
     struct nn_unit_t {
         std::shared_ptr<autodiff::op_t> weight1;
@@ -46,7 +52,7 @@ namespace residual {
         std::shared_ptr<autodiff::op_t> cell,
         unit_param_t& param);
 
-    void unit_nn_tie_grad(nn_unit_t& nn, unit_param_t& grad);
+    void unit_nn_tie_grad(nn_unit_t const& nn, unit_param_t& grad);
 
     void resize_as(unit_param_t& p1, unit_param_t const& p2);
 
@@ -61,11 +67,19 @@ namespace residual {
         la::vector<double> softmax_bias;
     };
 
+    void imul(nn_param_t& p, double a);
+    void iadd(nn_param_t& p1, nn_param_t const& p2);
+
     nn_param_t load_nn_param(std::istream& is);
+    nn_param_t load_nn_param(std::string filename);
     void save_nn_param(nn_param_t const& p, std::ostream& os);
+    void save_nn_param(nn_param_t const& p, std::string filename);
 
     void adagrad_update(nn_param_t& param, nn_param_t const& grad,
         nn_param_t& accu_grad_sq, double step_size);
+
+    void rmsprop_update(nn_param_t& param, nn_param_t const& grad,
+        nn_param_t& opt_data, double decay, double step_size);
 
     struct nn_t {
         std::shared_ptr<autodiff::op_t> input;
@@ -79,7 +93,7 @@ namespace residual {
     nn_t make_nn(autodiff::computation_graph& graph,
         nn_param_t& param);
 
-    void nn_tie_grad(nn_t& nn, nn_param_t& grad);
+    void nn_tie_grad(nn_t const& nn, nn_param_t& grad);
 
     void resize_as(nn_param_t& p1, nn_param_t const& p2);
 

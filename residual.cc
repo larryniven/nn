@@ -1,7 +1,24 @@
 #include "nn/residual.h"
 #include "ebt/json.h"
+#include <fstream>
 
 namespace residual {
+
+    void imul(unit_param_t& p, double a)
+    {
+        la::imul(p.weight1, a);
+        la::imul(p.bias1, a);
+        la::imul(p.weight2, a);
+        la::imul(p.bias2, a);
+    }
+
+    void iadd(unit_param_t& p1, unit_param_t const& p2)
+    {
+        la::iadd(p1.weight1, p2.weight1);
+        la::iadd(p1.bias1, p2.bias1);
+        la::iadd(p1.weight2, p2.weight2);
+        la::iadd(p1.bias2, p2.bias2);
+    }
 
     unit_param_t load_unit_param(std::istream& is)
     {
@@ -43,6 +60,15 @@ namespace residual {
         opt::adagrad_update(param.bias2, grad.bias2, accu_grad_sq.bias2, step_size);
     }
 
+    void rmsprop_update(unit_param_t& param, unit_param_t const& grad,
+        unit_param_t& opt_data, double decay, double step_size)
+    {
+        opt::rmsprop_update(param.weight1, grad.weight1, opt_data.weight1, decay, step_size);
+        opt::rmsprop_update(param.bias1, grad.bias1, opt_data.bias1, decay, step_size);
+        opt::rmsprop_update(param.weight2, grad.weight2, opt_data.weight2, decay, step_size);
+        opt::rmsprop_update(param.bias2, grad.bias2, opt_data.bias2, decay, step_size);
+    }
+
     nn_unit_t make_unit_nn(autodiff::computation_graph& graph,
         std::shared_ptr<autodiff::op_t> cell,
         unit_param_t& param)
@@ -66,7 +92,7 @@ namespace residual {
         return result;
     }
 
-    void unit_nn_tie_grad(nn_unit_t& nn, unit_param_t& grad)
+    void unit_nn_tie_grad(nn_unit_t const& nn, unit_param_t& grad)
     {
         nn.weight1->grad = std::make_shared<la::weak_matrix<double>>(grad.weight1);
         nn.bias1->grad = std::make_shared<la::weak_vector<double>>(grad.bias1);
@@ -94,6 +120,26 @@ namespace residual {
         return result;
     }
 
+    void imul(nn_param_t& p, double a)
+    {
+        for (int i = 0; i < p.layer.size(); ++i) {
+            imul(p.layer[i], a);
+        }
+
+        la::imul(p.input_weight, a);
+        la::imul(p.input_bias, a);
+    }
+
+    void iadd(nn_param_t& p1, nn_param_t const& p2)
+    {
+        for (int i = 0; i < p1.layer.size(); ++i) {
+            iadd(p1.layer[i], p2.layer[i]);
+        }
+
+        la::iadd(p1.input_weight, p2.input_weight);
+        la::iadd(p1.input_bias, p2.input_bias);
+    }
+
     nn_param_t load_nn_param(std::istream& is)
     {
         nn_param_t result;
@@ -117,6 +163,12 @@ namespace residual {
         return result;
     }
 
+    nn_param_t load_nn_param(std::string filename)
+    {
+        std::ifstream ifs { filename };
+        return load_nn_param(ifs);
+    }
+
     void save_nn_param(nn_param_t const& p, std::ostream& os)
     {
         ebt::json::dump(p.input_weight, os);
@@ -131,6 +183,12 @@ namespace residual {
         }
     }
 
+    void save_nn_param(nn_param_t const& p, std::string filename)
+    {
+        std::ofstream ofs { filename };
+        save_nn_param(p, ofs);
+    }
+
     void adagrad_update(nn_param_t& param, nn_param_t const& grad,
         nn_param_t& accu_grad_sq, double step_size)
     {
@@ -142,14 +200,25 @@ namespace residual {
         opt::adagrad_update(param.input_bias, grad.input_bias, accu_grad_sq.input_bias, step_size);
     }
 
+    void rmsprop_update(nn_param_t& param, nn_param_t const& grad,
+        nn_param_t& opt_data, double decay, double step_size)
+    {
+        for (int i = 0; i < param.layer.size(); ++i) {
+            rmsprop_update(param.layer[i], grad.layer[i], opt_data.layer[i], decay, step_size);
+        }
+
+        opt::rmsprop_update(param.input_weight, grad.input_weight, opt_data.input_weight, decay, step_size);
+        opt::rmsprop_update(param.input_bias, grad.input_bias, opt_data.input_bias, decay, step_size);
+    }
+
     nn_t make_nn(autodiff::computation_graph& graph,
         nn_param_t& param)
     {
         nn_t result;
 
         result.input = graph.var();
-        result.input_weight = graph.var(param.input_weight);
-        result.input_bias = graph.var(param.input_bias);
+        result.input_weight = graph.var(la::weak_matrix<double>(param.input_weight));
+        result.input_bias = graph.var(la::weak_vector<double>(param.input_bias));
 
         std::shared_ptr<autodiff::op_t> cell = autodiff::add(
             autodiff::mul(result.input_weight, result.input), result.input_bias);
@@ -162,7 +231,7 @@ namespace residual {
         return result;
     }
 
-    void nn_tie_grad(nn_t& nn, nn_param_t& grad)
+    void nn_tie_grad(nn_t const& nn, nn_param_t& grad)
     {
         nn.input_weight->grad = std::make_shared<la::weak_matrix<double>>(grad.input_weight);
         nn.input_bias->grad = std::make_shared<la::weak_vector<double>>(grad.input_bias);
