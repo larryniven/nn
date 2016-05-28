@@ -11,6 +11,7 @@ bin = \
     learn-gru \
     predict-gru \
     learn-residual \
+    predict-residual \
     libnn.a
 
 all: $(bin)
@@ -44,6 +45,9 @@ predict-gru: gru.o predict-gru.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 learn-residual: learn-residual.o residual.o pred.o nn.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+predict-residual: residual.o predict-residual.o pred.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 nn.o: nn.h

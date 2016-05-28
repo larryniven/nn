@@ -20,8 +20,6 @@ namespace residual {
         la::vector<double> bias1;
         la::matrix<double> weight2;
         la::vector<double> bias2;
-        // la::matrix<double> input_weight;
-        // la::vector<double> input_bias;
     };
 
     void imul(unit_param_t& p, double a);
@@ -41,8 +39,6 @@ namespace residual {
         std::shared_ptr<autodiff::op_t> bias1;
         std::shared_ptr<autodiff::op_t> weight2;
         std::shared_ptr<autodiff::op_t> bias2;
-        // std::shared_ptr<autodiff::op_t> input_weight;
-        // std::shared_ptr<autodiff::op_t> input_bias;
 
         std::shared_ptr<autodiff::op_t> cell;
         std::shared_ptr<autodiff::op_t> output;
@@ -98,6 +94,46 @@ namespace residual {
     void resize_as(nn_param_t& p1, nn_param_t const& p2);
 
     nn_param_t copy_nn_grad(nn_t const& nn);
+
+    struct y_unit_param_t {
+        la::matrix<double> weight1;
+        la::vector<double> bias1;
+        la::matrix<double> weight2;
+        la::vector<double> bias2;
+        la::matrix<double> input_weight;
+    };
+
+    void imul(y_unit_param_t& p, double a);
+    void iadd(y_unit_param_t& p1, y_unit_param_t const& p2);
+
+    void resize_as(y_unit_param_t& p1, y_unit_param_t const& p2);
+
+    y_unit_param_t load_y_unit_param(std::istream& is);
+    void save_y_unit_param(y_unit_param_t const& p, std::ostream& os);
+
+    void adagrad_update(y_unit_param_t& param, y_unit_param_t const& grad,
+        y_unit_param_t& accu_grad_sq, double step_size);
+
+    void rmsprop_update(y_unit_param_t& param, y_unit_param_t const& grad,
+        y_unit_param_t& opt_data, double decay, double step_size);
+
+    struct y_unit_nn_t {
+        std::shared_ptr<autodiff::op_t> weight1;
+        std::shared_ptr<autodiff::op_t> bias1;
+        std::shared_ptr<autodiff::op_t> weight2;
+        std::shared_ptr<autodiff::op_t> bias2;
+        std::shared_ptr<autodiff::op_t> input_weight;
+
+        std::vector<std::shared_ptr<autodiff::op_t>> cell;
+    };
+
+    y_unit_nn_t make_y_unit_nn(autodiff::computation_graph& graph,
+        y_unit_param_t& param,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& inputs);
+
+    void y_unit_nn_tie_grad(y_unit_nn_t const& nn, y_unit_param_t& grad);
+
+    y_unit_param_t copy_y_unit_grad(y_unit_nn_t const& unit);
 
 }
 

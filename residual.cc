@@ -266,4 +266,154 @@ namespace residual {
         return result;
     }
 
+    void imul(y_unit_param_t& p, double a)
+    {
+        la::imul(p.weight1, a);
+        la::imul(p.bias1, a);
+        la::imul(p.weight2, a);
+        la::imul(p.bias2, a);
+        la::imul(p.input_weight, a);
+    }
+
+    void iadd(y_unit_param_t& p1, y_unit_param_t const& p2)
+    {
+        la::iadd(p1.weight1, p2.weight1);
+        la::iadd(p1.bias1, p2.bias1);
+        la::iadd(p1.weight2, p2.weight2);
+        la::iadd(p1.bias2, p2.bias2);
+        la::iadd(p1.input_weight, p2.input_weight);
+    }
+
+    void resize_as(y_unit_param_t& p1, y_unit_param_t const& p2)
+    {
+        p1.weight1.resize(p2.weight1.rows(), p2.weight1.cols());
+        p1.bias1.resize(p2.bias1.size());
+        p1.weight2.resize(p2.weight2.rows(), p2.weight2.cols());
+        p1.bias2.resize(p2.bias2.size());
+        p1.input_weight.resize(p2.input_weight.rows(), p2.input_weight.cols());
+    }
+
+    y_unit_param_t load_y_unit_param(std::istream& is)
+    {
+        std::string line;
+        y_unit_param_t result;
+        ebt::json::json_parser<la::matrix<double>> mat_parser;
+        ebt::json::json_parser<la::vector<double>> vec_parser;
+
+        result.weight1 = mat_parser.parse(is);
+        std::getline(is, line);
+        result.bias1 = vec_parser.parse(is);
+        std::getline(is, line);
+        result.weight2 = mat_parser.parse(is);
+        std::getline(is, line);
+        result.bias2 = vec_parser.parse(is);
+        std::getline(is, line);
+        result.input_weight = mat_parser.parse(is);
+        std::getline(is, line);
+
+        return result;
+    }
+
+    void save_y_unit_param(y_unit_param_t const& p, std::ostream& os)
+    {
+        ebt::json::dump(p.weight1, os);
+        os << std::endl;
+        ebt::json::dump(p.bias1, os);
+        os << std::endl;
+        ebt::json::dump(p.weight2, os);
+        os << std::endl;
+        ebt::json::dump(p.bias2, os);
+        os << std::endl;
+        ebt::json::dump(p.input_weight, os);
+        os << std::endl;
+    }
+
+    void adagrad_update(y_unit_param_t& param, y_unit_param_t const& grad,
+        y_unit_param_t& accu_grad_sq, double step_size)
+    {
+        opt::adagrad_update(param.weight1, grad.weight1, accu_grad_sq.weight1, step_size);
+        opt::adagrad_update(param.bias1, grad.bias1, accu_grad_sq.bias1, step_size);
+        opt::adagrad_update(param.weight2, grad.weight2, accu_grad_sq.weight2, step_size);
+        opt::adagrad_update(param.bias2, grad.bias2, accu_grad_sq.bias2, step_size);
+        opt::adagrad_update(param.input_weight, grad.input_weight, accu_grad_sq.input_weight, step_size);
+    }
+
+    void rmsprop_update(y_unit_param_t& param, y_unit_param_t const& grad,
+        y_unit_param_t& opt_data, double decay, double step_size)
+    {
+        opt::rmsprop_update(param.weight1, grad.weight1, opt_data.weight1, decay, step_size);
+        opt::rmsprop_update(param.bias1, grad.bias1, opt_data.bias1, decay, step_size);
+        opt::rmsprop_update(param.weight2, grad.weight2, opt_data.weight2, decay, step_size);
+        opt::rmsprop_update(param.bias2, grad.bias2, opt_data.bias2, decay, step_size);
+        opt::rmsprop_update(param.input_weight, grad.input_weight, opt_data.input_weight, decay, step_size);
+    }
+
+    y_unit_nn_t make_y_unit_nn(autodiff::computation_graph& graph,
+        y_unit_param_t& param,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& inputs)
+    {
+        y_unit_nn_t result;
+
+        result.weight1 = graph.var(la::weak_matrix<double>(param.weight1));
+        result.bias1 = graph.var(la::weak_vector<double>(param.bias1));
+        result.weight2 = graph.var(la::weak_matrix<double>(param.weight2));
+        result.bias2 = graph.var(la::weak_vector<double>(param.bias2));
+        result.input_weight = graph.var(la::weak_matrix<double>(param.input_weight));
+
+        la::vector<double> zero;
+        zero.resize(param.bias1.size());
+
+        std::shared_ptr<autodiff::op_t> h = autodiff::add(
+            std::vector<std::shared_ptr<autodiff::op_t>> {
+                result.bias1,
+                autodiff::mul(result.input_weight, inputs[0])
+            });
+
+        result.cell.push_back(autodiff::add(
+            std::vector<std::shared_ptr<autodiff::op_t>> {
+                autodiff::mul(result.weight2, autodiff::tanh(h)),
+                result.bias2
+            }));
+
+        for (int i = 1; i < inputs.size(); ++i) {
+            std::shared_ptr<autodiff::op_t> h = autodiff::add(
+                std::vector<std::shared_ptr<autodiff::op_t>> {
+                    autodiff::mul(result.weight1, autodiff::tanh(result.cell[i-1])),
+                    result.bias1,
+                    autodiff::mul(result.input_weight, inputs[i])
+                });
+
+            result.cell.push_back(autodiff::add(
+                std::vector<std::shared_ptr<autodiff::op_t>> {
+                    result.cell[i-1],
+                    autodiff::mul(result.weight2, autodiff::tanh(h)),
+                    result.bias2
+                }));
+        }
+
+        return result;
+    }
+
+    void y_unit_nn_tie_grad(y_unit_nn_t const& nn, y_unit_param_t& grad)
+    {
+        nn.weight1->grad = std::make_shared<la::weak_matrix<double>>(grad.weight1);
+        nn.bias1->grad = std::make_shared<la::weak_vector<double>>(grad.bias1);
+        nn.weight2->grad = std::make_shared<la::weak_matrix<double>>(grad.weight2);
+        nn.bias2->grad = std::make_shared<la::weak_vector<double>>(grad.bias2);
+        nn.input_weight->grad = std::make_shared<la::weak_matrix<double>>(grad.input_weight);
+    }
+
+    y_unit_param_t copy_y_unit_grad(y_unit_nn_t const& unit)
+    {
+        y_unit_param_t result;
+
+        result.weight1 = autodiff::get_grad<la::matrix<double>>(unit.weight1);
+        result.bias1 = autodiff::get_grad<la::vector<double>>(unit.bias1);
+        result.weight2 = autodiff::get_grad<la::matrix<double>>(unit.weight2);
+        result.bias2 = autodiff::get_grad<la::vector<double>>(unit.bias2);
+        result.input_weight = autodiff::get_grad<la::matrix<double>>(unit.input_weight);
+
+        return result;
+    }
+
 }
