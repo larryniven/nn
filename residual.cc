@@ -371,14 +371,14 @@ namespace residual {
 
         result.cell.push_back(autodiff::add(
             std::vector<std::shared_ptr<autodiff::op_t>> {
-                autodiff::mul(result.weight2, autodiff::tanh(h)),
+                autodiff::mul(result.weight2, autodiff::relu(h)),
                 result.bias2
             }));
 
         for (int i = 1; i < inputs.size(); ++i) {
             std::shared_ptr<autodiff::op_t> h = autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
-                    autodiff::mul(result.weight1, autodiff::tanh(result.cell[i-1])),
+                    autodiff::mul(result.weight1, autodiff::relu(result.cell[i-1])),
                     result.bias1,
                     autodiff::mul(result.input_weight, inputs[i])
                 });
@@ -386,7 +386,7 @@ namespace residual {
             result.cell.push_back(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
                     result.cell[i-1],
-                    autodiff::mul(result.weight2, autodiff::tanh(h)),
+                    autodiff::mul(result.weight2, autodiff::relu(h)),
                     result.bias2
                 }));
         }
