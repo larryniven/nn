@@ -238,8 +238,6 @@ void learning_env::run()
         lstm::dblstm_feat_param_t grad = lstm::copy_dblstm_feat_grad(nn);
         nn::pred_param_t pred_grad = rnn::copy_grad(pred_nn);
 
-        lstm::bound(grad, -1, 1);
-
         if (ebt::in(std::string("momentum"), args)) {
             // lstm::const_step_update_momentum(param, grad, opt_data, momentum, step_size);
             std::cerr << "not implemented" << std::endl;
