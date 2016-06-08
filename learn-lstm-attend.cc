@@ -8,6 +8,7 @@
 #include "nn/lstm.h"
 #include "nn/pred.h"
 #include "nn/nn.h"
+#include "nn/attention.h"
 #include <random>
 
 struct learning_env {
@@ -51,15 +52,6 @@ struct learning_env {
     void run();
 
 };
-
-struct attention_nn_t {
-    std::shared_ptr<autodiff::op_t> attention;
-    std::shared_ptr<autodiff::op_t> context;
-};
-
-attention_nn_t attend(
-    std::shared_ptr<autodiff::op_t> const& inputs,
-    std::shared_ptr<autodiff::op_t> const& target);
 
 int main(int argc, char *argv[])
 {
@@ -210,11 +202,11 @@ void learning_env::run()
         }
 
         std::shared_ptr<autodiff::op_t> hs = autodiff::row_cat(nn.layer.back().output);
-        std::vector<attention_nn_t> atts;
+        std::vector<attention::attention_nn_t> atts;
         std::vector<std::shared_ptr<autodiff::op_t>> context;
         
         for (int i = 0; i < nn.layer.back().output.size(); ++i) {
-            atts.push_back(attend(hs, nn.layer.back().output[i]));
+            atts.push_back(attention::attend(hs, nn.layer.back().output[i]));
             context.push_back(atts.back().context);
         }
 
@@ -317,14 +309,3 @@ void learning_env::run()
     opt_data_ofs.close();
 }
 
-attention_nn_t attend(
-    std::shared_ptr<autodiff::op_t> const& hs,
-    std::shared_ptr<autodiff::op_t> const& target)
-{
-    attention_nn_t att;
-
-    att.attention = autodiff::softmax(autodiff::mul(hs, target));
-    att.context = autodiff::lmul(att.attention, hs);
-
-    return att;
-}
