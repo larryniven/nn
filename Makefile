@@ -14,6 +14,7 @@ bin = \
     predict-lstm2d \
     learn-residual \
     predict-residual \
+    learn-lstm-attend \
     libnn.a
 
 all: $(bin)
@@ -56,6 +57,9 @@ learn-residual: learn-residual.o residual.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 predict-residual: residual.o predict-residual.o pred.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+learn-lstm-attend: lstm.o learn-lstm-attend.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 nn.o: nn.h
