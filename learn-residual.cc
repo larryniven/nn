@@ -187,7 +187,7 @@ void learning_env::run()
             if (!ebt::in(labels[t], ignored)) {
                 gold(label_id.at(labels[t])) = 1;
             }
-            nn::log_loss loss { pred, gold };
+            nn::log_loss loss { gold, pred };
             pred_nn.logprob->grad = std::make_shared<la::vector<double>>(loss.grad());
 
             if (std::isnan(loss.loss())) {

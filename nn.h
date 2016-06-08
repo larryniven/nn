@@ -61,11 +61,11 @@ namespace nn {
 
     struct log_loss {
     
-        la::vector<double> const& pred;
         la::vector<double> const& gold;
+        la::vector<double> const& pred;
     
-        log_loss(la::vector<double> const& pred,
-            la::vector<double> const& gold);
+        log_loss(la::vector<double> const& gold,
+            la::vector<double> const& pred);
     
         double loss();
     

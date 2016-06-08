@@ -246,13 +246,13 @@ namespace nn {
     }
 
     log_loss::log_loss(
-        la::vector<double> const& pred, la::vector<double> const& gold)
-        : pred(pred), gold(gold)
+        la::vector<double> const& gold, la::vector<double> const& pred)
+        : gold(gold), pred(pred)
     {}
     
     double log_loss::loss()
     {
-        return -la::dot(pred, gold);
+        return -la::dot(gold, pred);
     }
     
     la::vector<double> log_loss::grad()

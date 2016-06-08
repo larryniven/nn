@@ -177,7 +177,7 @@ void learning_env::run()
             if (!ebt::in(labels[t], ignored)) {
                 gold(label_id.at(labels[t])) = 1;
             }
-            nn::log_loss loss { pred, gold };
+            nn::log_loss loss { gold, pred };
             pred_nn.logprob[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
             if (std::isnan(loss.loss())) {
                 std::cerr << "loss is nan" << std::endl;
@@ -194,7 +194,7 @@ void learning_env::run()
             la::vector<double> gold;
             gold.resize(label_id.size());
             gold(label_id.at(labels[0])) = 1;
-            nn::log_loss loss { pred, gold };
+            nn::log_loss loss { gold, pred };
 
             double ell1 = loss.loss();
 
@@ -220,7 +220,7 @@ void learning_env::run()
             la::vector<double> gold2;
             gold2.resize(label_id.size());
             gold2(label_id.at(labels[0])) = 1;
-            nn::log_loss loss2 { pred2, gold2 };
+            nn::log_loss loss2 { gold2, pred2 };
 
             double ell2 = loss2.loss();
 
