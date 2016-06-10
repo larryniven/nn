@@ -47,6 +47,50 @@ namespace lstm {
         return result;
     }
 
+    void imul(lstm_unit_param_t& param, double a)
+    {
+        la::imul(param.hidden_input, a);
+        la::imul(param.hidden_output, a);
+        la::imul(param.hidden_bias, a);
+
+        la::imul(param.input_input, a);
+        la::imul(param.input_output, a);
+        la::imul(param.input_peep, a);
+        la::imul(param.input_bias, a);
+
+        la::imul(param.output_input, a);
+        la::imul(param.output_output, a);
+        la::imul(param.output_peep, a);
+        la::imul(param.output_bias, a);
+
+        la::imul(param.forget_input, a);
+        la::imul(param.forget_output, a);
+        la::imul(param.forget_peep, a);
+        la::imul(param.forget_bias, a);
+    }
+
+    void iadd(lstm_unit_param_t& p1, lstm_unit_param_t const& p2)
+    {
+        la::iadd(p1.hidden_input, p2.hidden_input);
+        la::iadd(p1.hidden_output, p2.hidden_output);
+        la::iadd(p1.hidden_bias, p2.hidden_bias);
+
+        la::iadd(p1.input_input, p2.input_input);
+        la::iadd(p1.input_output, p2.input_output);
+        la::iadd(p1.input_peep, p2.input_peep);
+        la::iadd(p1.input_bias, p2.input_bias);
+
+        la::iadd(p1.output_input, p2.output_input);
+        la::iadd(p1.output_output, p2.output_output);
+        la::iadd(p1.output_peep, p2.output_peep);
+        la::iadd(p1.output_bias, p2.output_bias);
+
+        la::iadd(p1.forget_input, p2.forget_input);
+        la::iadd(p1.forget_output, p2.forget_output);
+        la::iadd(p1.forget_peep, p2.forget_peep);
+        la::iadd(p1.forget_bias, p2.forget_bias);
+    }
+
     lstm_unit_param_t load_lstm_unit_param(std::string filename)
     {
         std::ifstream ifs { filename };
@@ -928,6 +972,26 @@ namespace lstm {
         return result;
     }
 
+    void imul(blstm_feat_param_t& param, double a)
+    {
+        imul(param.forward_param, a);
+        imul(param.backward_param, a);
+
+        la::imul(param.forward_output_weight, a);
+        la::imul(param.backward_output_weight, a);
+        la::imul(param.output_bias, a);
+    }
+
+    void iadd(blstm_feat_param_t& p1, blstm_feat_param_t& p2)
+    {
+        iadd(p1.forward_param, p2.forward_param);
+        iadd(p1.backward_param, p2.backward_param);
+
+        la::iadd(p1.forward_output_weight, p2.forward_output_weight);
+        la::iadd(p1.backward_output_weight, p2.backward_output_weight);
+        la::iadd(p1.output_bias, p2.output_bias);
+    }
+
     blstm_feat_param_t load_blstm_feat_param(std::istream& is)
     {
         std::string line;
@@ -1056,6 +1120,20 @@ namespace lstm {
         result.output_bias = autodiff::get_grad<decltype(result.output_bias)>(nn.output_bias);
 
         return result;
+    }
+
+    void imul(dblstm_feat_param_t& param, double a)
+    {
+        for (auto& ell: param.layer) {
+            imul(ell, a);
+        }
+    }
+
+    void iadd(dblstm_feat_param_t& p1, dblstm_feat_param_t& p2)
+    {
+        for (int i = 0; i < p1.layer.size(); ++i) {
+            iadd(p1.layer[i], p2.layer[i]);
+        }
     }
 
     dblstm_feat_param_t load_dblstm_feat_param(std::istream& is)

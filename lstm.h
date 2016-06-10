@@ -28,6 +28,9 @@ namespace lstm {
         la::vector<double> forget_bias;
     };
 
+    void imul(lstm_unit_param_t& param, double a);
+    void iadd(lstm_unit_param_t& p1, lstm_unit_param_t const& p2);
+
     lstm_unit_param_t load_lstm_unit_param(std::istream& is);
     lstm_unit_param_t load_lstm_unit_param(std::string filename);
 
@@ -257,6 +260,9 @@ namespace lstm {
         la::vector<double> output_bias;
     };
 
+    void imul(blstm_feat_param_t& param, double a);
+    void iadd(blstm_feat_param_t& p1, blstm_feat_param_t& p2);
+
     blstm_feat_param_t load_blstm_feat_param(std::istream& is);
     blstm_feat_param_t load_blstm_feat_param(std::string filename);
 
@@ -292,6 +298,9 @@ namespace lstm {
     struct dblstm_feat_param_t {
         std::vector<blstm_feat_param_t> layer;
     };
+
+    void imul(dblstm_feat_param_t& param, double a);
+    void iadd(dblstm_feat_param_t& p1, dblstm_feat_param_t& p2);
 
     dblstm_feat_param_t load_dblstm_feat_param(std::istream& is);
     dblstm_feat_param_t load_dblstm_feat_param(std::string filename);

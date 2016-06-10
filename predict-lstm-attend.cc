@@ -40,7 +40,8 @@ int main(int argc, char *argv[])
             {"rnndrop-prob", "", false},
             {"logprob", "", false},
             {"subsample-freq", "", false},
-            {"subsample-shift", "", false}
+            {"subsample-shift", "", false},
+            {"attention", "", false}
         }
     };
 
@@ -147,6 +148,36 @@ void prediction_env::run()
                     std::cout << " " << pred(j);
                 }
 
+                std::cout << std::endl;
+            }
+        } else if (ebt::in(std::string("attention"), args)) {
+            for (int i = 0; i < atts.size(); ++i) {
+                auto& pred = autodiff::get_output<la::vector<double>>(upsampled_output[i]);
+
+                int argmax = -1;
+                double max = -std::numeric_limits<double>::infinity();
+
+                for (int j = 0; j < pred.size(); ++j) {
+                    if (pred(j) > max) {
+                        max = pred(j);
+                        argmax = j;
+                    }
+                }
+
+                std::cout << label[argmax] << " " << i << " ";
+
+                auto& v = autodiff::get_output<la::vector<double>>(atts[i].attention);
+                std::cout << "[";
+                for (int j = 0; j < v.size(); ++j) {
+                    if (j == i) {
+                        std::cout << "*";
+                    }
+                    std::cout << v(j);
+                    if (j != v.size() - 1) {
+                        std::cout << ", ";
+                    }
+                }
+                std::cout << "]";
                 std::cout << std::endl;
             }
         } else {
