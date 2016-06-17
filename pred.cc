@@ -42,6 +42,24 @@ namespace nn {
         save_pred_param(param, ofs);
     }
 
+    void const_step_update(pred_param_t& param, pred_param_t const& grad,
+        double step_size)
+    {
+        opt::const_step_update(param.softmax_weight, grad.softmax_weight,
+            step_size);
+        opt::const_step_update(param.softmax_bias, grad.softmax_bias,
+            step_size);
+    }
+
+    void const_step_update_momentum(pred_param_t& param, pred_param_t const& grad,
+        pred_param_t& opt_data, double momentum, double step_size)
+    {
+        opt::const_step_update_momentum(param.softmax_weight, grad.softmax_weight,
+            opt_data.softmax_weight, momentum, step_size);
+        opt::const_step_update_momentum(param.softmax_bias, grad.softmax_bias,
+            opt_data.softmax_bias, momentum, step_size);
+    }
+
     void adagrad_update(pred_param_t& param, pred_param_t const& grad,
         pred_param_t& opt_data, double step_size)
     {
@@ -84,6 +102,16 @@ namespace nn {
         result.softmax_bias = autodiff::get_grad<la::vector<double>>(nn.softmax_bias);
 
         return result;
+    }
+
+    std::shared_ptr<tensor_tree::vertex> make_pred_tensor_tree()
+    {
+        tensor_tree::vertex root { tensor_tree::tensor_t::nil };
+
+        root.children.push_back(tensor_tree::make_matrix("softmax weight"));
+        root.children.push_back(tensor_tree::make_vector("softmax bias"));
+
+        return std::make_shared<tensor_tree::vertex>(root);
     }
 
 }
@@ -168,6 +196,21 @@ namespace rnn {
     
         assert(j == outputs.size());
     
+        return result;
+    }
+
+    pred_nn_t make_pred_nn(autodiff::computation_graph& g,
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat)
+    {
+        pred_nn_t result;
+
+        for (int i = 0; i < feat.size(); ++i) {
+            result.logprob.push_back(autodiff::logsoftmax(autodiff::add(
+                autodiff::mul(get_var(var_tree->children[0]), feat[i]),
+                    get_var(var_tree->children[1]))));
+        }
+
         return result;
     }
 

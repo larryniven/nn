@@ -4,6 +4,7 @@
 #include "la/la.h"
 #include "autodiff/autodiff.h"
 #include <random>
+#include "nn/tensor_tree.h"
 
 namespace lstm {
 
@@ -28,6 +29,8 @@ namespace lstm {
         la::vector<double> forget_bias;
     };
 
+    void resize_as(lstm_unit_param_t& p1, lstm_unit_param_t const& p2);
+
     void imul(lstm_unit_param_t& param, double a);
     void iadd(lstm_unit_param_t& p1, lstm_unit_param_t const& p2);
 
@@ -36,6 +39,9 @@ namespace lstm {
 
     void save_lstm_unit_param(lstm_unit_param_t const& p, std::ostream& os);
     void save_lstm_unit_param(lstm_unit_param_t const& p, std::string filename);
+
+    void const_step_update(lstm_unit_param_t& p, lstm_unit_param_t const& grad,
+        double step_size);
 
     void const_step_update_momentum(lstm_unit_param_t& p, lstm_unit_param_t const& grad,
         lstm_unit_param_t& opt_data, double momentum, double step_size);
@@ -96,11 +102,16 @@ namespace lstm {
         la::vector<double> output_bias;
     };
 
+    void resize_as(lstm2d_param_t& p1, lstm2d_param_t const& p2);
+
     lstm2d_param_t load_lstm2d_param(std::istream& is);
     lstm2d_param_t load_lstm2d_param(std::string filename);
 
     void save_lstm2d_param(lstm2d_param_t const& p, std::ostream& os);
     void save_lstm2d_param(lstm2d_param_t const& p, std::string filename);
+
+    void const_step_update(lstm2d_param_t& p, lstm2d_param_t const& grad,
+        double step_size);
 
     void const_step_update_momentum(lstm2d_param_t& p, lstm2d_param_t const& grad,
         lstm2d_param_t& opt_data, double momentum, double step_size);
@@ -140,11 +151,16 @@ namespace lstm {
         lstm2d_param_t backward_param;
     };
 
+    void resize_as(bi_lstm2d_param_t& p1, bi_lstm2d_param_t const& p2);
+
     bi_lstm2d_param_t load_bi_lstm2d_param(std::istream& is);
     bi_lstm2d_param_t load_bi_lstm2d_param(std::string filename);
 
     void save_bi_lstm2d_param(bi_lstm2d_param_t const& p, std::ostream& os);
     void save_bi_lstm2d_param(bi_lstm2d_param_t const& p, std::string filename);
+
+    void const_step_update(bi_lstm2d_param_t& p, bi_lstm2d_param_t const& grad,
+        double step_size);
 
     void const_step_update_momentum(bi_lstm2d_param_t& p, bi_lstm2d_param_t const& grad,
         bi_lstm2d_param_t& opt_data, double momentum, double step_size);
@@ -174,11 +190,16 @@ namespace lstm {
         std::vector<bi_lstm2d_param_t> layer;
     };
 
+    void resize_as(db_lstm2d_param_t& p1, db_lstm2d_param_t const& p2);
+
     db_lstm2d_param_t load_db_lstm2d_param(std::istream& is);
     db_lstm2d_param_t load_db_lstm2d_param(std::string filename);
 
     void save_db_lstm2d_param(db_lstm2d_param_t const& p, std::ostream& os);
     void save_db_lstm2d_param(db_lstm2d_param_t const& p, std::string filename);
+
+    void const_step_update(db_lstm2d_param_t& p, db_lstm2d_param_t const& grad,
+        double step_size);
 
     void const_step_update_momentum(db_lstm2d_param_t& p, db_lstm2d_param_t const& grad,
         db_lstm2d_param_t& opt_data, double momentum, double step_size);
@@ -260,6 +281,8 @@ namespace lstm {
         la::vector<double> output_bias;
     };
 
+    void resize_as(blstm_feat_param_t& p1, blstm_feat_param_t const& p2);
+
     void imul(blstm_feat_param_t& param, double a);
     void iadd(blstm_feat_param_t& p1, blstm_feat_param_t& p2);
 
@@ -268,6 +291,9 @@ namespace lstm {
 
     void save_blstm_feat_param(blstm_feat_param_t const& p, std::ostream& os);
     void save_blstm_feat_param(blstm_feat_param_t const& p, std::string filename);
+
+    void const_step_update(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
+        double step_size);
 
     void const_step_update_momentum(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
         blstm_feat_param_t& opt_data, double momentum, double step_size);
@@ -299,6 +325,8 @@ namespace lstm {
         std::vector<blstm_feat_param_t> layer;
     };
 
+    void resize_as(dblstm_feat_param_t& p1, dblstm_feat_param_t const& p2);
+
     void imul(dblstm_feat_param_t& param, double a);
     void iadd(dblstm_feat_param_t& p1, dblstm_feat_param_t& p2);
 
@@ -307,6 +335,9 @@ namespace lstm {
 
     void save_dblstm_feat_param(dblstm_feat_param_t const& p, std::ostream& os);
     void save_dblstm_feat_param(dblstm_feat_param_t const& p, std::string filename);
+
+    void const_step_update(dblstm_feat_param_t& p, dblstm_feat_param_t const& grad,
+        double step_size);
 
     void const_step_update_momentum(dblstm_feat_param_t& p, dblstm_feat_param_t const& grad,
         dblstm_feat_param_t& opt_data, double momentum, double step_size);
@@ -331,6 +362,18 @@ namespace lstm {
         std::default_random_engine& gen, double prob);
 
     void apply_mask(dblstm_feat_nn_t& nn, dblstm_feat_param_t const& param, double prob);
+
+    // lstm
+
+    std::shared_ptr<tensor_tree::vertex> make_lstm_tensor_tree();
+
+    lstm_step_nn_t make_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> cell,
+        std::shared_ptr<autodiff::op_t> output,
+        std::shared_ptr<autodiff::op_t> input);
+
+    lstm_feat_nn_t make_lstm_feat_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat);
 
 }
 

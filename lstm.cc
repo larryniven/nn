@@ -47,6 +47,28 @@ namespace lstm {
         return result;
     }
 
+    void resize_as(lstm_unit_param_t& p1, lstm_unit_param_t const& p2)
+    {
+        p1.hidden_input.resize(p2.hidden_input.rows(), p2.hidden_input.cols());
+        p1.hidden_output.resize(p2.hidden_output.rows(), p2.hidden_output.cols());
+        p1.hidden_bias.resize(p2.hidden_bias.size());
+
+        p1.input_input.resize(p2.input_input.rows(), p2.input_input.cols());
+        p1.input_output.resize(p2.input_output.rows(), p2.input_output.cols());
+        p1.input_peep.resize(p2.input_peep.size());
+        p1.input_bias.resize(p2.input_bias.size());
+
+        p1.output_input.resize(p2.output_input.rows(), p2.output_input.cols());
+        p1.output_output.resize(p2.output_output.rows(), p2.output_output.cols());
+        p1.output_peep.resize(p2.output_peep.size());
+        p1.output_bias.resize(p2.output_bias.size());
+
+        p1.forget_input.resize(p2.forget_input.rows(), p2.forget_input.cols());
+        p1.forget_output.resize(p2.forget_output.rows(), p2.forget_output.cols());
+        p1.forget_peep.resize(p2.forget_peep.size());
+        p1.forget_bias.resize(p2.forget_bias.size());
+    }
+
     void imul(lstm_unit_param_t& param, double a)
     {
         la::imul(param.hidden_input, a);
@@ -138,6 +160,44 @@ namespace lstm {
     {
         std::ofstream ofs { filename };
         save_lstm_unit_param(p, ofs);
+    }
+
+    void const_step_update(lstm_unit_param_t& p, lstm_unit_param_t const& grad,
+        double step_size)
+    {
+        opt::const_step_update(p.hidden_input, grad.hidden_input,
+            step_size);
+        opt::const_step_update(p.hidden_output, grad.hidden_output,
+            step_size);
+        opt::const_step_update(p.hidden_bias, grad.hidden_bias,
+            step_size);
+
+        opt::const_step_update(p.input_input, grad.input_input,
+            step_size);
+        opt::const_step_update(p.input_output, grad.input_output,
+            step_size);
+        opt::const_step_update(p.input_peep, grad.input_peep,
+            step_size);
+        opt::const_step_update(p.input_bias, grad.input_bias,
+            step_size);
+
+        opt::const_step_update(p.output_input, grad.output_input,
+            step_size);
+        opt::const_step_update(p.output_output, grad.output_output,
+            step_size);
+        opt::const_step_update(p.output_peep, grad.output_peep,
+            step_size);
+        opt::const_step_update(p.output_bias, grad.output_bias,
+            step_size);
+
+        opt::const_step_update(p.forget_input, grad.forget_input,
+            step_size);
+        opt::const_step_update(p.forget_output, grad.forget_output,
+            step_size);
+        opt::const_step_update(p.forget_peep, grad.forget_peep,
+            step_size);
+        opt::const_step_update(p.forget_bias, grad.forget_bias,
+            step_size);
     }
 
     void const_step_update_momentum(lstm_unit_param_t& p, lstm_unit_param_t const& grad,
@@ -437,6 +497,16 @@ namespace lstm {
         return result;
     }
 
+    void resize_as(lstm2d_param_t& p1, lstm2d_param_t const& p2)
+    {
+        resize_as(p1.h_param, p2.h_param);
+        resize_as(p1.v_param, p2.v_param);
+
+        p1.output_h_weight.resize(p2.output_h_weight.rows(), p2.output_h_weight.cols());
+        p1.output_v_weight.resize(p2.output_v_weight.rows(), p2.output_v_weight.cols());
+        p1.output_bias.resize(p2.output_bias.size());
+    }
+
     lstm2d_param_t load_lstm2d_param(std::istream& is)
     {
         lstm2d_param_t result;
@@ -478,6 +548,21 @@ namespace lstm {
     {
         std::ofstream ofs { filename };
         return save_lstm2d_param(p, ofs);
+    }
+
+    void const_step_update(lstm2d_param_t& p, lstm2d_param_t const& grad,
+        double step_size)
+    {
+        const_step_update(p.h_param, grad.h_param,
+            step_size);
+        const_step_update(p.v_param, grad.v_param,
+            step_size);
+        opt::const_step_update(p.output_h_weight, grad.output_h_weight,
+            step_size);
+        opt::const_step_update(p.output_v_weight, grad.output_v_weight,
+            step_size);
+        opt::const_step_update(p.output_bias, grad.output_bias,
+            step_size);
     }
 
     void const_step_update_momentum(lstm2d_param_t& p, lstm2d_param_t const& grad,
@@ -571,6 +656,12 @@ namespace lstm {
 
     // bidirectional 2-lstm
 
+    void resize_as(bi_lstm2d_param_t& p1, bi_lstm2d_param_t const& p2)
+    {
+        resize_as(p1.forward_param, p2.forward_param);
+        resize_as(p1.backward_param, p2.backward_param);
+    }
+
     bi_lstm2d_param_t load_bi_lstm2d_param(std::istream& is)
     {
         std::string line;
@@ -598,6 +689,15 @@ namespace lstm {
     {
         std::ofstream ofs { filename };
         save_bi_lstm2d_param(p, ofs);
+    }
+
+    void const_step_update(bi_lstm2d_param_t& p, bi_lstm2d_param_t const& grad,
+        double step_size)
+    {
+        const_step_update(p.forward_param, grad.forward_param,
+            step_size);
+        const_step_update(p.backward_param, grad.backward_param,
+            step_size);
     }
 
     void const_step_update_momentum(bi_lstm2d_param_t& p, bi_lstm2d_param_t const& grad,
@@ -665,6 +765,14 @@ namespace lstm {
 
     // deep bidirectional 2-lstm
 
+    void resize_as(db_lstm2d_param_t& p1, db_lstm2d_param_t const& p2)
+    {
+        p1.layer.resize(p2.layer.size());
+        for (int i = 0; i < p2.layer.size(); ++i) {
+            resize_as(p1.layer[i], p2.layer[i]);
+        }
+    }
+
     db_lstm2d_param_t load_db_lstm2d_param(std::istream& is)
     {
         db_lstm2d_param_t result;
@@ -700,6 +808,14 @@ namespace lstm {
     {
         std::ofstream ofs { filename };
         save_db_lstm2d_param(p, ofs);
+    }
+
+    void const_step_update(db_lstm2d_param_t& p, db_lstm2d_param_t const& grad,
+        double step_size)
+    {
+        for (int i = 0; i < p.layer.size(); ++i) {
+            const_step_update(p.layer[i], grad.layer[i], step_size);
+        }
     }
 
     void const_step_update_momentum(db_lstm2d_param_t& p, db_lstm2d_param_t const& grad,
@@ -972,6 +1088,18 @@ namespace lstm {
         return result;
     }
 
+    // blstm
+
+    void resize_as(blstm_feat_param_t& p1, blstm_feat_param_t const& p2)
+    {
+        resize_as(p1.forward_param, p2.forward_param);
+        resize_as(p1.backward_param, p2.backward_param);
+
+        p1.forward_output_weight.resize(p2.forward_output_weight.rows(), p2.forward_output_weight.cols());
+        p1.backward_output_weight.resize(p2.backward_output_weight.rows(), p2.backward_output_weight.cols());
+        p1.output_bias.resize(p2.output_bias.size());
+    }
+
     void imul(blstm_feat_param_t& param, double a)
     {
         imul(param.forward_param, a);
@@ -1033,6 +1161,22 @@ namespace lstm {
     {
         std::ofstream ofs { filename };
         save_blstm_feat_param(p, ofs);
+    }
+
+    void const_step_update(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
+        double step_size)
+    {
+        const_step_update(p.forward_param, grad.forward_param,
+            step_size);
+        const_step_update(p.backward_param, grad.backward_param,
+            step_size);
+
+        opt::const_step_update(p.forward_output_weight, grad.forward_output_weight,
+            step_size);
+        opt::const_step_update(p.backward_output_weight, grad.backward_output_weight,
+            step_size);
+        opt::const_step_update(p.output_bias, grad.output_bias,
+            step_size);
     }
 
     void const_step_update_momentum(blstm_feat_param_t& p, blstm_feat_param_t const& grad,
@@ -1122,6 +1266,16 @@ namespace lstm {
         return result;
     }
 
+    // dblstm
+
+    void resize_as(dblstm_feat_param_t& p1, dblstm_feat_param_t const& p2)
+    {
+        p1.layer.resize(p2.layer.size());
+        for (int i = 0; i < p2.layer.size(); ++i) {
+            resize_as(p1.layer[i], p2.layer[i]);
+        }
+    }
+
     void imul(dblstm_feat_param_t& param, double a)
     {
         for (auto& ell: param.layer) {
@@ -1171,6 +1325,14 @@ namespace lstm {
     {
         std::ofstream ofs { filename };
         save_dblstm_feat_param(p, ofs);
+    }
+
+    void const_step_update(dblstm_feat_param_t& p, dblstm_feat_param_t const& grad,
+        double step_size)
+    {
+        for (int i = 0; i < p.layer.size(); ++i) {
+            const_step_update(p.layer[i], grad.layer[i], step_size);
+        }
     }
 
     void const_step_update_momentum(dblstm_feat_param_t& p, dblstm_feat_param_t const& grad,
@@ -1267,4 +1429,116 @@ namespace lstm {
             b_mask->output = std::make_shared<la::vector<double>>(mask_vec);
         }
     }
+
+    // lstm
+
+    std::shared_ptr<tensor_tree::vertex> make_lstm_tensor_tree()
+    {
+        tensor_tree::vertex root { tensor_tree::tensor_t::nil };
+
+        // 0
+        root.children.push_back(tensor_tree::make_matrix("input -> hidden"));
+        root.children.push_back(tensor_tree::make_matrix("output -> hidden"));
+        root.children.push_back(tensor_tree::make_vector("hidden bias"));
+
+        // 3
+        root.children.push_back(tensor_tree::make_matrix("input -> input gate"));
+        root.children.push_back(tensor_tree::make_matrix("output -> input gate"));
+        root.children.push_back(tensor_tree::make_vector("input gate peep"));
+        root.children.push_back(tensor_tree::make_vector("input gate bias"));
+
+        // 7
+        root.children.push_back(tensor_tree::make_matrix("input -> output gate"));
+        root.children.push_back(tensor_tree::make_matrix("output -> output gate"));
+        root.children.push_back(tensor_tree::make_vector("output gate peep"));
+        root.children.push_back(tensor_tree::make_vector("output gate bias"));
+
+        // 11
+        root.children.push_back(tensor_tree::make_matrix("input -> forget gate"));
+        root.children.push_back(tensor_tree::make_matrix("output -> forget gate"));
+        root.children.push_back(tensor_tree::make_vector("forget gate peep"));
+        root.children.push_back(tensor_tree::make_vector("forget gate bias"));
+
+        return std::make_shared<tensor_tree::vertex>(root);
+    }
+
+    lstm_step_nn_t make_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> cell,
+        std::shared_ptr<autodiff::op_t> output,
+        std::shared_ptr<autodiff::op_t> input)
+    {
+        lstm_step_nn_t result;
+
+        std::vector<std::shared_ptr<autodiff::op_t>> h_comp { get_var(var_tree->children[2]) };
+        std::vector<std::shared_ptr<autodiff::op_t>> input_gate_comp { get_var(var_tree->children[6]) };
+        std::vector<std::shared_ptr<autodiff::op_t>> forget_gate_comp { get_var(var_tree->children[14]) };
+
+        if (input != nullptr) {
+            h_comp.push_back(autodiff::mul(get_var(var_tree->children[0]), input));
+            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[3]), input));
+            forget_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[11]), input));
+        }
+
+        if (output != nullptr) {
+            h_comp.push_back(autodiff::mul(get_var(var_tree->children[1]), output));
+            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[4]), output));
+            forget_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[12]), output));
+        }
+
+        if (cell != nullptr) {
+            input_gate_comp.push_back(autodiff::emul(get_var(var_tree->children[5]), cell));
+            forget_gate_comp.push_back(autodiff::emul(get_var(var_tree->children[13]), cell));
+        }
+
+        std::shared_ptr<autodiff::op_t> h = autodiff::tanh(autodiff::add(h_comp));
+        result.input_gate = autodiff::logistic(autodiff::add(input_gate_comp));
+        result.forget_gate = autodiff::logistic(autodiff::add(forget_gate_comp));
+
+        if (cell != nullptr) {
+            result.cell = autodiff::add(
+                autodiff::emul(result.forget_gate, cell),
+                autodiff::emul(result.input_gate, h));
+        } else {
+            result.cell = autodiff::emul(result.input_gate, h);
+        }
+
+        std::vector<std::shared_ptr<autodiff::op_t>> output_gate_comp {
+            get_var(var_tree->children[10]), autodiff::emul(get_var(var_tree->children[9]), result.cell) };
+
+        if (input != nullptr) {
+            output_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[7]), input));
+        }
+
+        if (output != nullptr) {
+            output_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[8]), output));
+        }
+
+        result.output_gate = autodiff::logistic(autodiff::add(output_gate_comp));
+
+        result.output = autodiff::emul(result.output_gate,
+            autodiff::tanh(result.cell));
+
+        return result;
+    }
+
+    lstm_feat_nn_t make_lstm_feat_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat)
+    {
+        lstm_feat_nn_t result;
+
+        std::shared_ptr<autodiff::op_t> cell = nullptr;
+        std::shared_ptr<autodiff::op_t> output = nullptr;
+
+        for (int i = 0; i < feat.size(); ++i) {
+            lstm_step_nn_t step_nn = make_lstm_step_nn(var_tree, cell, output, feat[i]);
+            cell = step_nn.cell;
+            output = step_nn.output;
+
+            result.cell.push_back(cell);
+            result.output.push_back(output);
+        }
+
+        return result;
+    }
+
 }

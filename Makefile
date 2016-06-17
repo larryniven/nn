@@ -66,11 +66,15 @@ learn-lstm-attend: learn-lstm-attend.o lstm.o attention.o pred.o nn.o
 predict-lstm-attend: predict-lstm-attend.o lstm.o attention.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
+learn-lstm-sandbox: learn-lstm-sandbox.o lstm.o pred.o tensor_tree.o nn.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
 nn.o: nn.h
 lstm.o: lstm.h
 gru.o: gru.h
 pred.o: pred.h
 residual.o: residual.h
+tensor_tree.o: tensor_tree.h
 
 libnngpu.a: nn.o nn-gpu.o
 	$(AR) rcs $@ $^

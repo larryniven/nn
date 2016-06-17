@@ -3,6 +3,7 @@
 
 #include "la/la.h"
 #include "autodiff/autodiff.h"
+#include "nn/tensor_tree.h"
 
 namespace nn {
 
@@ -16,6 +17,12 @@ namespace nn {
 
     void save_pred_param(pred_param_t const& param, std::ostream& os);
     void save_pred_param(pred_param_t const& param, std::string filename);
+
+    void const_step_update(pred_param_t& param, pred_param_t const& grad,
+        double step_size);
+
+    void const_step_update_momentum(pred_param_t& param, pred_param_t const& grad,
+        pred_param_t& opt_data, double momentum, double step_size);
 
     void adagrad_update(pred_param_t& param, pred_param_t const& grad,
         pred_param_t& opt_data, double step_size);
@@ -36,6 +43,8 @@ namespace nn {
         pred_param_t const& param);
 
     pred_param_t copy_grad(pred_nn_t const& nn);
+
+    std::shared_ptr<tensor_tree::vertex> make_pred_tensor_tree();
 
 }
 
@@ -64,6 +73,10 @@ namespace rnn {
     std::vector<std::shared_ptr<autodiff::op_t>> upsample_output(
         std::vector<std::shared_ptr<autodiff::op_t>> const& outputs,
         int freq, int shift, int size);
+
+    pred_nn_t make_pred_nn(autodiff::computation_graph& g,
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat);
 
 }
 
