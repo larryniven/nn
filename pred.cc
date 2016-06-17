@@ -199,7 +199,7 @@ namespace rnn {
         return result;
     }
 
-    pred_nn_t make_pred_nn(autodiff::computation_graph& g,
+    pred_nn_t make_pred_nn(
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat)
     {

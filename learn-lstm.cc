@@ -9,26 +9,31 @@
 #include "nn/pred.h"
 #include "nn/nn.h"
 #include <random>
+#include "nn/tensor_tree.h"
 
 struct learning_env {
 
     std::ifstream frame_batch;
     std::ifstream label_batch;
 
-    lstm::dblstm_feat_param_t param;
-    lstm::dblstm_feat_param_t opt_data;
+    std::shared_ptr<tensor_tree::vertex> param;
+    std::shared_ptr<tensor_tree::vertex> opt_data;
 
-    nn::pred_param_t pred_param;
-    nn::pred_param_t pred_opt_data;
+    std::shared_ptr<tensor_tree::vertex> pred_param;
+    std::shared_ptr<tensor_tree::vertex> pred_opt_data;
 
-    lstm::dblstm_feat_nn_t nn;
+    std::shared_ptr<tensor_tree::vertex> lstm_var_tree;
+    std::shared_ptr<tensor_tree::vertex> pred_var_tree;
+
+    int layer;
+
+    lstm::stacked_bi_lstm_nn_t nn;
     rnn::pred_nn_t pred_nn;
 
     double step_size;
     double rmsprop_decay;
-    double momentum;
 
-    double rnndrop_prob;
+    double dropout;
 
     int subsample_freq;
     int subsample_shift;
@@ -37,6 +42,8 @@ struct learning_env {
 
     std::string output_param;
     std::string output_opt_data;
+
+    double clip;
 
     std::unordered_map<std::string, int> label_id;
 
@@ -64,16 +71,13 @@ int main(int argc, char *argv[])
             {"opt-data", "", true},
             {"step-size", "", true},
             {"rmsprop-decay", "", false},
-            {"momentum", "", false},
-            {"rnndrop-prob", "", false},
             {"save-every", "", false},
             {"output-param", "", false},
             {"output-opt-data", "", false},
+            {"clip", "", false},
             {"label", "", true},
-            {"rnndrop-seed", "", false},
-            {"subsample-freq", "", false},
-            {"subsample-shift", "", false},
-            {"ignored", "", false}
+            {"ignored", "", false},
+            {"dropout", "", false}
         }
     };
 
@@ -99,14 +103,25 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     frame_batch.open(args.at("frame-batch"));
     label_batch.open(args.at("label-batch"));
 
+    std::string line;
+
     std::ifstream param_ifs { args.at("param") };
-    param = lstm::load_dblstm_feat_param(param_ifs);
-    pred_param = nn::load_pred_param(param_ifs);
+    std::getline(param_ifs, line);
+    layer = std::stoi(line);
+
+    param = lstm::make_stacked_bi_lstm_tensor_tree(layer);
+    tensor_tree::load_tensor(param, param_ifs);
+    pred_param = nn::make_pred_tensor_tree();
+    tensor_tree::load_tensor(pred_param, param_ifs);
     param_ifs.close();
 
     std::ifstream opt_data_ifs { args.at("opt-data") };
-    opt_data = lstm::load_dblstm_feat_param(opt_data_ifs);
-    pred_opt_data = nn::load_pred_param(opt_data_ifs);
+    std::getline(opt_data_ifs, line);
+
+    opt_data = lstm::make_stacked_bi_lstm_tensor_tree(layer);
+    tensor_tree::load_tensor(opt_data, opt_data_ifs);
+    pred_opt_data = nn::make_pred_tensor_tree();
+    tensor_tree::load_tensor(pred_opt_data, opt_data_ifs);
     opt_data_ifs.close();
 
     if (ebt::in(std::string("save-every"), args)) {
@@ -117,16 +132,8 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
 
     step_size = std::stod(args.at("step-size"));
 
-    if (ebt::in(std::string("momentum"), args)) {
-        momentum = std::stod(args.at("momentum"));
-    }
-
     if (ebt::in(std::string("rmsprop-decay"), args)) {
         rmsprop_decay = std::stod(args.at("rmsprop-decay"));
-    }
-
-    if (ebt::in(std::string("rnndrop-prob"), args)) {
-        rnndrop_prob = std::stod(args.at("rnndrop-prob"));
     }
 
     output_param = "param-last";
@@ -139,29 +146,23 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
         output_opt_data = args.at("output-opt-data");
     }
 
+    clip = std::numeric_limits<double>::infinity();
+    if (ebt::in(std::string("clip"), args)) {
+        clip = std::stod(args.at("clip"));
+    }
+
     std::vector<std::string> label_vec = speech::load_label_set(args.at("label"));
     for (int i = 0; i < label_vec.size(); ++i) {
         label_id[label_vec[i]] = i;
     }
 
-    seed = 1;
-    if (ebt::in(std::string("rnndrop-seed"), args)) {
-        seed = std::stoi(args.at("rnndrop-seed"));
-    }
-
-    subsample_freq = 1;
-    if (ebt::in(std::string("subsample-freq"), args)) {
-        subsample_freq = std::stoi(args.at("subsample-freq"));
-    }
-
-    subsample_shift = 0;
-    if (ebt::in(std::string("subsample-shift"), args)) {
-        subsample_shift = std::stoi(args.at("subsample-shift"));
-    }
-
     if (ebt::in(std::string("ignored"), args)) {
         auto parts = ebt::split(args.at("ignored"), ",");
         ignored.insert(parts.begin(), parts.end());
+    }
+
+    if (ebt::in(std::string("dropout"), args)) {
+        dropout = std::stod(args.at("dropout"));
     }
 }
 
@@ -191,37 +192,33 @@ void learning_env::run()
             inputs.push_back(graph.var(la::vector<double>(frames[i])));
         }
 
-        std::vector<std::shared_ptr<autodiff::op_t>> subsampled_inputs
-            = rnn::subsample_input(inputs, subsample_freq, subsample_shift);
+        lstm_var_tree = tensor_tree::make_var_tree(graph, param);
+        pred_var_tree = tensor_tree::make_var_tree(graph, pred_param);
 
-        nn = lstm::make_dblstm_feat_nn(graph, param, subsampled_inputs);
-
-        if (ebt::in(std::string("rnndrop-prob"), args)) {
-            lstm::apply_random_mask(nn, param, gen, rnndrop_prob);
+        if (ebt::in(std::string("dropout"), args)) {
+            nn = lstm::make_stacked_bi_lstm_nn_with_dropout(
+                graph, lstm_var_tree, inputs, gen, dropout);
+        } else {
+            nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs);
         }
 
-        pred_nn = rnn::make_pred_nn(graph, pred_param, nn.layer.back().output);
+        pred_nn = rnn::make_pred_nn(pred_var_tree, nn.layer.back().output);
 
-        std::vector<std::shared_ptr<autodiff::op_t>> upsampled_output
-            = rnn::upsample_output(pred_nn.logprob, subsample_freq, subsample_shift, frames.size());
-
-        assert(upsampled_output.size() == frames.size());
-
-        auto topo_order = autodiff::topo_order(upsampled_output);
+        auto topo_order = autodiff::topo_order(pred_nn.logprob);
         autodiff::eval(topo_order, autodiff::eval_funcs);
 
         double loss_sum = 0;
         double nframes = 0;
 
-        for (int t = 0; t < upsampled_output.size(); ++t) {
-            auto& pred = autodiff::get_output<la::vector<double>>(upsampled_output[t]);
+        for (int t = 0; t < pred_nn.logprob.size(); ++t) {
+            auto& pred = autodiff::get_output<la::vector<double>>(pred_nn.logprob[t]);
             la::vector<double> gold;
             gold.resize(label_id.size());
             if (!ebt::in(labels[t], ignored)) {
                 gold(label_id.at(labels[t])) = 1;
             }
             nn::log_loss loss { gold, pred };
-            upsampled_output[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
+            pred_nn.logprob[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
             if (std::isnan(loss.loss())) {
                 std::cerr << "loss is nan" << std::endl;
                 exit(1);
@@ -235,47 +232,39 @@ void learning_env::run()
 
         autodiff::grad(topo_order, autodiff::grad_funcs);
 
-        lstm::dblstm_feat_param_t grad = lstm::copy_dblstm_feat_grad(nn);
-        nn::pred_param_t pred_grad = rnn::copy_grad(pred_nn);
+        std::shared_ptr<tensor_tree::vertex> grad = lstm::make_stacked_bi_lstm_tensor_tree(layer);
+        tensor_tree::copy_grad(grad, lstm_var_tree);
+        std::shared_ptr<tensor_tree::vertex> pred_grad = nn::make_pred_tensor_tree();
+        tensor_tree::copy_grad(pred_grad, pred_var_tree);
 
-        if (ebt::in(std::string("momentum"), args)) {
-            // lstm::const_step_update_momentum(param, grad, opt_data, momentum, step_size);
-            std::cerr << "not implemented" << std::endl;
-            exit(1);
-        } else if (ebt::in(std::string("rmsprop-decay"), args)) {
-            lstm::rmsprop_update(param, grad, opt_data, rmsprop_decay, step_size);
-            nn::rmsprop_update(pred_param, pred_grad, pred_opt_data, rmsprop_decay, step_size);
+        if (ebt::in(std::string("clip"), args)) {
+            double n = tensor_tree::norm(grad);
+
+            if (n > clip) {
+                tensor_tree::imul(grad, clip / n);
+                std::cout << "norm: " << n << " clip: " << clip << " gradient clipped" << std::endl;
+            }
+        }
+
+        if (ebt::in(std::string("rmsprop-decay"), args)) {
+            tensor_tree::rmsprop_update(param, grad, opt_data, rmsprop_decay, step_size);
+            tensor_tree::rmsprop_update(pred_param, pred_grad, pred_opt_data, rmsprop_decay, step_size);
         } else {
-            lstm::adagrad_update(param, grad, opt_data, step_size);
-            nn::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
+            tensor_tree::adagrad_update(param, grad, opt_data, step_size);
+            tensor_tree::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
         }
-
-#if 0
-        {
-            lstm::param_t p = param;
-            p.hidden_input(0, 0) += 1e-8;
-            lstm::nn_t nn2 = lstm::make_nn(p, frames);
-            lstm::eval(nn2);
-            auto& pred = autodiff::get_output<la::vector<double>>(nn2.logprob.at(1));
-            la::vector<double> gold;
-            gold.resize(label_id.size());
-            gold(label_id.at(labels[1])) = 1;
-            lstm::log_loss loss2 { gold, pred };
-
-            auto& grad = autodiff::get_grad<la::matrix<double>>(nn.hidden_input);
-            std::cout << (loss2.loss() - loss_1) / 1e-8 << " " << grad(0, 0) << std::endl;
-        }
-#endif
 
         if (i % save_every == 0) {
             std::ofstream param_ofs { "param-last" };
-            lstm::save_dblstm_feat_param(param, param_ofs);
-            nn::save_pred_param(pred_param, param_ofs);
+            param_ofs << layer << std::endl;
+            tensor_tree::save_tensor(param, param_ofs);
+            tensor_tree::save_tensor(pred_param, param_ofs);
             param_ofs.close();
 
             std::ofstream opt_data_ofs { "opt-data-last" };
-            lstm::save_dblstm_feat_param(opt_data, opt_data_ofs);
-            nn::save_pred_param(pred_opt_data, opt_data_ofs);
+            opt_data_ofs << layer << std::endl;
+            tensor_tree::save_tensor(opt_data, opt_data_ofs);
+            tensor_tree::save_tensor(pred_opt_data, opt_data_ofs);
             opt_data_ofs.close();
         }
 
@@ -289,13 +278,15 @@ void learning_env::run()
     }
 
     std::ofstream param_ofs { output_param };
-    lstm::save_dblstm_feat_param(param, param_ofs);
-    nn::save_pred_param(pred_param, param_ofs);
+    param_ofs << layer << std::endl;
+    tensor_tree::save_tensor(param, param_ofs);
+    tensor_tree::save_tensor(pred_param, param_ofs);
     param_ofs.close();
 
     std::ofstream opt_data_ofs { output_opt_data };
-    lstm::save_dblstm_feat_param(opt_data, opt_data_ofs);
-    nn::save_pred_param(pred_opt_data, opt_data_ofs);
+    opt_data_ofs << layer << std::endl;
+    tensor_tree::save_tensor(opt_data, opt_data_ofs);
+    tensor_tree::save_tensor(pred_opt_data, opt_data_ofs);
     opt_data_ofs.close();
 }
 

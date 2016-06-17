@@ -50,6 +50,9 @@ namespace tensor_tree {
 
     void imul(std::shared_ptr<vertex> root, double a);
     void iadd(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2);
+    void isub(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2);
+
+    double norm(std::shared_ptr<vertex> root);
 
     void adagrad_update(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
         std::shared_ptr<vertex> accu_grad_sq, double step_size);

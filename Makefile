@@ -36,10 +36,10 @@ learn: nn.o learn.o
 predict: nn.o predict.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lopt -lla -lebt -lblas
 
-learn-lstm: lstm.o learn-lstm.o pred.o nn.o
+learn-lstm: learn-lstm.o tensor_tree.o lstm.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
-predict-lstm: lstm.o predict-lstm.o pred.o
+predict-lstm: predict-lstm.o tensor_tree.o lstm.o pred.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 learn-gru: gru.o learn-gru.o
@@ -64,9 +64,6 @@ learn-lstm-attend: learn-lstm-attend.o lstm.o attention.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 predict-lstm-attend: predict-lstm-attend.o lstm.o attention.o pred.o nn.o
-	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
-
-learn-lstm-sandbox: learn-lstm-sandbox.o lstm.o pred.o tensor_tree.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 nn.o: nn.h

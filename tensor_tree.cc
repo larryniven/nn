@@ -22,6 +22,7 @@ namespace tensor_tree {
             return get_data<la::vector<double>>(p);
         } else {
             std::cerr << "expecting tensor_t::vector" << std::endl;
+            exit(1);
         }
     }
 
@@ -31,6 +32,7 @@ namespace tensor_tree {
             return get_data<la::matrix<double>>(p);
         } else {
             std::cerr << "expecting tensor_t::matrix" << std::endl;
+            exit(1);
         }
     }
 
@@ -40,6 +42,7 @@ namespace tensor_tree {
             return std::static_pointer_cast<autodiff::op_t>(p->data);
         } else {
             std::cerr << "expecting tensor_t::autodiff_var" << std::endl;
+            exit(1);
         }
     }
 
@@ -139,9 +142,9 @@ namespace tensor_tree {
 
         for (auto& t: order) {
             if (t->type == tensor_t::vector) {
-                la::mul(get_data<la::vector<double>>(t), a);
+                la::imul(get_data<la::vector<double>>(t), a);
             } else if (t->type == tensor_t::matrix) {
-                la::mul(get_data<la::matrix<double>>(t), a);
+                la::imul(get_data<la::matrix<double>>(t), a);
             }
         }
     }
@@ -176,6 +179,23 @@ namespace tensor_tree {
                     get_data<la::matrix<double>>(p2_order[i]));
             }
         }
+    }
+
+    double norm(std::shared_ptr<vertex> root)
+    {
+        auto order = leaves_pre_order(root);
+
+        double result = 0;
+
+        for (int i = 0; i < order.size(); ++i) {
+            if (order[i]->type == tensor_t::vector) {
+                result += la::norm(get_vector(order[i]));
+            } else if (order[i]->type == tensor_t::matrix) {
+                result += la::norm(get_matrix(order[i]));
+            }
+        }
+
+        return result;
     }
 
     void adagrad_update(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
