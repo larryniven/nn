@@ -34,9 +34,7 @@ struct learning_env {
     double rmsprop_decay;
 
     double dropout;
-
-    int subsample_freq;
-    int subsample_shift;
+    int dropout_seed;
 
     int save_every;
 
@@ -48,8 +46,6 @@ struct learning_env {
     std::unordered_map<std::string, int> label_id;
 
     std::unordered_set<std::string> ignored;
-
-    int seed;
 
     std::unordered_map<std::string, std::string> args;
 
@@ -77,7 +73,8 @@ int main(int argc, char *argv[])
             {"clip", "", false},
             {"label", "", true},
             {"ignored", "", false},
-            {"dropout", "", false}
+            {"dropout", "", false},
+            {"dropout-seed", "", false}
         }
     };
 
@@ -164,13 +161,17 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     if (ebt::in(std::string("dropout"), args)) {
         dropout = std::stod(args.at("dropout"));
     }
+
+    if (ebt::in(std::string("dropout-seed"), args)) {
+        dropout_seed = std::stoi(args.at("dropout-seed"));
+    }
 }
 
 void learning_env::run()
 {
     int i = 1;
 
-    std::default_random_engine gen { seed };
+    std::default_random_engine gen { dropout_seed };
 
     while (1) {
         std::vector<std::vector<double>> frames;
