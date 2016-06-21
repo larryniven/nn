@@ -63,6 +63,8 @@ namespace tensor_tree {
     std::shared_ptr<vertex> make_var_tree(autodiff::computation_graph& g,
         std::shared_ptr<vertex> root);
 
+    std::shared_ptr<vertex> copy_tree(std::shared_ptr<vertex> root);
+
     void copy_grad(std::shared_ptr<vertex> result, std::shared_ptr<vertex> var_tree);
 
     void print_tree(std::shared_ptr<vertex> root);

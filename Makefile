@@ -10,12 +10,8 @@ bin = \
     predict-lstm \
     learn-gru \
     predict-gru \
-    learn-lstm2d \
-    predict-lstm2d \
     learn-residual \
     predict-residual \
-    learn-lstm-attend \
-    predict-lstm-attend \
     libnn.a
 
 all: $(bin)
@@ -27,7 +23,7 @@ clean:
 	-rm $(bin)
 	-rm learn-lstm-gpu libnngpu.a
 
-libnn.a: nn.o lstm.o pred.o residual.o
+libnn.a: nn.o lstm.o pred.o residual.o tensor_tree.o
 	$(AR) rcs $@ $^
 
 learn: nn.o learn.o
@@ -48,22 +44,10 @@ learn-gru: gru.o learn-gru.o
 predict-gru: gru.o predict-gru.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
-learn-lstm2d: lstm.o learn-lstm2d.o pred.o nn.o
+learn-residual: learn-residual.o residual.o pred.o nn.o tensor_tree.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
-predict-lstm2d: lstm.o predict-lstm2d.o pred.o
-	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
-
-learn-residual: learn-residual.o residual.o pred.o nn.o
-	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
-
-predict-residual: predict-residual.o residual.o pred.o
-	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
-
-learn-lstm-attend: learn-lstm-attend.o lstm.o attention.o pred.o nn.o
-	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
-
-predict-lstm-attend: predict-lstm-attend.o lstm.o attention.o pred.o nn.o
+predict-residual: predict-residual.o residual.o pred.o tensor_tree.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 nn.o: nn.h

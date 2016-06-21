@@ -294,6 +294,48 @@ namespace tensor_tree {
         return vertex_map.at(root);
     }
 
+    std::shared_ptr<vertex> copy_tree(std::shared_ptr<vertex> root)
+    {
+        std::unordered_map<std::shared_ptr<vertex>, std::shared_ptr<vertex>> vertex_map;
+
+        std::vector<std::tuple<std::shared_ptr<vertex>, bool>> stack;
+
+        stack.push_back(std::make_tuple(root, false));
+
+        while (stack.size() > 0) {
+            std::shared_ptr<vertex> u;
+            bool finished;
+            std::tie(u, finished) = stack.back();
+            stack.pop_back();
+
+            if (!finished) {
+                stack.push_back(std::make_tuple(u, true));
+
+                for (int i = u->children.size() - 1; i >= 0; --i) {
+                    stack.push_back(std::make_tuple(u->children[i], false));
+                }
+            } else {
+                std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {tensor_t::nil});
+
+                if (u->type == tensor_t::vector) {
+                    k->type = u->type;
+                    k->data = std::make_shared<la::vector<double>>(la::vector<double>(get_vector(u)));
+                } else if (u->type == tensor_t::matrix) {
+                    k->type = u->type;
+                    k->data = std::make_shared<la::matrix<double>>(la::matrix<double>(get_matrix(u)));
+                }
+
+                vertex_map[u] = k;
+
+                for (int i = 0; i < u->children.size(); ++i) {
+                    k->children.push_back(vertex_map.at(u->children[i]));
+                }
+            }
+        }
+
+        return vertex_map.at(root);
+    }
+
     void copy_grad(std::shared_ptr<vertex> result, std::shared_ptr<vertex> var_tree)
     {
         auto result_order = leaves_pre_order(result);
