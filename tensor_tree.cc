@@ -198,6 +198,33 @@ namespace tensor_tree {
         return result;
     }
 
+    void const_step_update_momentum(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
+        std::shared_ptr<vertex> opt_data, double momentum, double step_size)
+    {
+        auto param_order = leaves_pre_order(param);
+        auto grad_order = leaves_pre_order(grad);
+        auto opt_data_order = leaves_pre_order(opt_data);
+
+        assert(param_order.size() == grad_order.size()
+            && grad_order.size() == opt_data_order.size());
+
+        for (int i = 0; i < param_order.size(); ++i) {
+            if (grad_order[i]->type == tensor_t::vector) {
+                opt::const_step_update_momentum(
+                    get_data<la::vector<double>>(param_order[i]),
+                    get_data<la::vector<double>>(grad_order[i]),
+                    get_data<la::vector<double>>(opt_data_order[i]),
+                    momentum, step_size);
+            } else if (grad_order[i]->type == tensor_t::matrix) {
+                opt::const_step_update_momentum(
+                    get_data<la::matrix<double>>(param_order[i]),
+                    get_data<la::matrix<double>>(grad_order[i]),
+                    get_data<la::matrix<double>>(opt_data_order[i]),
+                    momentum, step_size);
+            }
+        }
+    }
+
     void adagrad_update(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
         std::shared_ptr<vertex> accu_grad_sq, double step_size)
     {
