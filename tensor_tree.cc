@@ -306,6 +306,7 @@ namespace tensor_tree {
                 if (u->type == tensor_t::vector || u->type == tensor_t::matrix) {
                     k->type = tensor_t::autodiff_var;
                     auto v = g.var();
+                    v->grad_needed = true;
                     v->output = u->data;
                     k->data = v;
                 }
