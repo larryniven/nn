@@ -192,28 +192,40 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
 
         for (int i = 0; i < var_tree->children.size(); ++i) {
-            if (i != 0) {
-                std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
+            std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
 
-                auto& m = autodiff::get_output<la::matrix<double>>(
-                    get_var(var_tree->children[i]->children[0]->children[0]));
+            auto& m = autodiff::get_output<la::matrix<double>>(
+                get_var(var_tree->children[i]->children[0]->children[0]));
 
-                for (int j = 0; j < f->size(); ++j) {
-                    la::vector<double> v;
-                    v.resize(m.cols());
-                    for (int d = 0; d < v.size(); ++d) {
-                        v(d) = bernoulli(gen);
-                    }
-                    std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
-                    masked_input.push_back(autodiff::emul((*f)[j], input_mask));
+            for (int j = 0; j < f->size(); ++j) {
+                la::vector<double> v;
+                v.resize(m.cols());
+                for (int d = 0; d < v.size(); ++d) {
+                    v(d) = bernoulli(gen);
                 }
-
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
-            } else {
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f));
+                std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
+                masked_input.push_back(autodiff::emul((*f)[j], input_mask));
             }
 
+            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
+
             f = &result.layer.back().output;
+        }
+
+        auto& v = autodiff::get_output<la::vector<double>>(
+            get_var(var_tree->children.back()->children.back()));
+
+        for (int i = 0; i < result.layer.back().output.size(); ++i) {
+            la::vector<double> u;
+            u.resize(v.size());
+
+            for (int j = 0; j < v.size(); ++j) {
+                u(j) = bernoulli(gen);
+            }
+
+            std::shared_ptr<autodiff::op_t> output_mask = g.var(std::move(u));
+
+            result.layer.back().output[i] = autodiff::emul(result.layer.back().output[i], output_mask);
         }
 
         return result;
@@ -230,28 +242,40 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
 
         for (int i = 0; i < var_tree->children.size(); ++i) {
-            if (i != 0) {
-                std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
+            std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
 
-                auto& m = autodiff::get_output<la::matrix<double>>(
-                    get_var(var_tree->children[i]->children[0]->children[0]));
+            auto& m = autodiff::get_output<la::matrix<double>>(
+                get_var(var_tree->children[i]->children[0]->children[0]));
 
-                for (int j = 0; j < f->size(); ++j) {
-                    la::vector<double> v;
-                    v.resize(m.cols());
-                    for (int d = 0; d < v.size(); ++d) {
-                        v(d) = 1 - prob;
-                    }
-                    std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
-                    masked_input.push_back(autodiff::emul((*f)[j], input_mask));
+            for (int j = 0; j < f->size(); ++j) {
+                la::vector<double> v;
+                v.resize(m.cols());
+                for (int d = 0; d < v.size(); ++d) {
+                    v(d) = 1 - prob;
                 }
-
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
-            } else {
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f));
+                std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
+                masked_input.push_back(autodiff::emul((*f)[j], input_mask));
             }
 
+            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
+
             f = &result.layer.back().output;
+        }
+
+        auto& v = autodiff::get_output<la::vector<double>>(
+            get_var(var_tree->children.back()->children.back()));
+
+        for (int i = 0; i < result.layer.back().output.size(); ++i) {
+            la::vector<double> u;
+            u.resize(v.size());
+
+            for (int j = 0; j < v.size(); ++j) {
+                u(j) = 1 - prob;
+            }
+
+            std::shared_ptr<autodiff::op_t> output_mask = g.var(std::move(u));
+
+            result.layer.back().output[i] = autodiff::emul(result.layer.back().output[i], output_mask);
         }
 
         return result;

@@ -31,7 +31,7 @@ struct learning_env {
     rnn::pred_nn_t pred_nn;
 
     double step_size;
-    double rmsprop_decay;
+    double decay;
 
     double dropout;
     int dropout_seed;
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
             {"param", "", true},
             {"opt-data", "", true},
             {"step-size", "", true},
-            {"rmsprop-decay", "", false},
+            {"decay", "", false},
             {"save-every", "", false},
             {"output-param", "", false},
             {"output-opt-data", "", false},
@@ -85,7 +85,10 @@ int main(int argc, char *argv[])
 
     auto args = ebt::parse_args(argc, argv, spec);
 
-    std::cout << args << std::endl;
+    for (int i = 0; i < argc; ++i) {
+        std::cout << argv[i] << " ";
+    }
+    std::cout << std::endl;
 
     learning_env env { args };
 
@@ -129,8 +132,8 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
 
     step_size = std::stod(args.at("step-size"));
 
-    if (ebt::in(std::string("rmsprop-decay"), args)) {
-        rmsprop_decay = std::stod(args.at("rmsprop-decay"));
+    if (ebt::in(std::string("decay"), args)) {
+        decay = std::stod(args.at("decay"));
     }
 
     output_param = "param-last";
@@ -247,9 +250,9 @@ void learning_env::run()
             }
         }
 
-        if (ebt::in(std::string("rmsprop-decay"), args)) {
-            tensor_tree::rmsprop_update(param, grad, opt_data, rmsprop_decay, step_size);
-            tensor_tree::rmsprop_update(pred_param, pred_grad, pred_opt_data, rmsprop_decay, step_size);
+        if (ebt::in(std::string("decay"), args)) {
+            tensor_tree::rmsprop_update(param, grad, opt_data, decay, step_size);
+            tensor_tree::rmsprop_update(pred_param, pred_grad, pred_opt_data, decay, step_size);
         } else {
             tensor_tree::adagrad_update(param, grad, opt_data, step_size);
             tensor_tree::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
