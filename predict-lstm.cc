@@ -23,6 +23,9 @@ struct prediction_env {
 
     double dropout;
 
+    int subsample_freq;
+    int subsample_shift;
+
     std::unordered_map<std::string, std::string> args;
 
     prediction_env(std::unordered_map<std::string, std::string> args);
@@ -41,7 +44,9 @@ int main(int argc, char *argv[])
             {"param", "", true},
             {"label", "", true},
             {"dropout", "", false},
-            {"logprob", "", false}
+            {"logprob", "", false},
+            {"subsample-freq", "", false},
+            {"subsample-shift", "", false},
         }
     };
 
@@ -83,6 +88,15 @@ prediction_env::prediction_env(std::unordered_map<std::string, std::string> args
     if (ebt::in(std::string("dropout"), args)) {
         dropout = std::stod(args.at("dropout"));
     }
+
+    subsample_freq = 1;
+    if (ebt::in(std::string("subsample-freq"), args)) {
+        subsample_freq = std::stoi(args.at("subsample-freq"));
+    }
+
+    if (ebt::in(std::string("subsample-shift"), args)) {
+        subsample_shift = std::stoi(args.at("subsample-shift"));
+    }
 }
 
 void prediction_env::run()
@@ -105,6 +119,10 @@ void prediction_env::run()
             inputs.push_back(graph.var(la::vector<double>(frames[i])));
         }
 
+        if (subsample_freq > 1) {
+            inputs = lstm::subsample(inputs, subsample_freq, subsample_shift);
+        }
+
         lstm_var_tree = tensor_tree::make_var_tree(graph, param);
         pred_var_tree = tensor_tree::make_var_tree(graph, pred_param);
 
@@ -116,14 +134,20 @@ void prediction_env::run()
 
         pred_nn = rnn::make_pred_nn(pred_var_tree, nn.layer.back().output);
 
-        auto topo_order = autodiff::topo_order(pred_nn.logprob);
+        std::vector<std::shared_ptr<autodiff::op_t>> logprobs = pred_nn.logprob;
+
+        if (subsample_freq > 1) {
+            logprobs = lstm::upsample(pred_nn.logprob, subsample_freq, subsample_shift, frames.size());
+        }
+
+        auto topo_order = autodiff::topo_order(logprobs);
         autodiff::eval(topo_order, autodiff::eval_funcs);
 
         std::cout << i << ".phn" << std::endl;
 
         if (ebt::in(std::string("logprob"), args)) {
-            for (int t = 0; t < pred_nn.logprob.size(); ++t) {
-                auto& pred = autodiff::get_output<la::vector<double>>(pred_nn.logprob[t]);
+            for (int t = 0; t < logprobs.size(); ++t) {
+                auto& pred = autodiff::get_output<la::vector<double>>(logprobs[t]);
 
                 std::cout << pred(0);
 
@@ -134,8 +158,8 @@ void prediction_env::run()
                 std::cout << std::endl;
             }
         } else {
-            for (int t = 0; t < pred_nn.logprob.size(); ++t) {
-                auto& pred = autodiff::get_output<la::vector<double>>(pred_nn.logprob[t]);
+            for (int t = 0; t < logprobs.size(); ++t) {
+                auto& pred = autodiff::get_output<la::vector<double>>(logprobs[t]);
 
                 int argmax = -1;
                 double max = -std::numeric_limits<double>::infinity();
