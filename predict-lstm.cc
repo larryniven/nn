@@ -57,7 +57,10 @@ int main(int argc, char *argv[])
 
     auto args = ebt::parse_args(argc, argv, spec);
 
-    std::cout << args << std::endl;
+    for (int i = 0; i < argc; ++i) {
+        std::cout << argv[i] << " ";
+    }
+    std::cout << std::endl;
 
     prediction_env env { args };
 
