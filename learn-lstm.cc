@@ -43,6 +43,9 @@ struct learning_env {
 
     double clip;
 
+    int subsample_freq;
+    int subsample_shift;
+
     std::unordered_map<std::string, int> label_id;
 
     std::unordered_set<std::string> ignored;
@@ -74,7 +77,9 @@ int main(int argc, char *argv[])
             {"label", "", true},
             {"ignored", "", false},
             {"dropout", "", false},
-            {"dropout-seed", "", false}
+            {"dropout-seed", "", false},
+            {"subsample-freq", "", false},
+            {"subsample-shift", "", false},
         }
     };
 
@@ -168,6 +173,15 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     if (ebt::in(std::string("dropout-seed"), args)) {
         dropout_seed = std::stoi(args.at("dropout-seed"));
     }
+
+    subsample_freq = 1;
+    if (ebt::in(std::string("subsample-freq"), args)) {
+        subsample_freq = std::stoi(args.at("subsample-freq"));
+    }
+
+    if (ebt::in(std::string("subsample-shift"), args)) {
+        subsample_shift = std::stoi(args.at("subsample-shift"));
+    }
 }
 
 void learning_env::run()
@@ -189,11 +203,17 @@ void learning_env::run()
             break;
         }
 
+        assert(frames.size() == labels.size());
+
         autodiff::computation_graph graph;
         std::vector<std::shared_ptr<autodiff::op_t>> inputs;
 
         for (int i = 0; i < frames.size(); ++i) {
             inputs.push_back(graph.var(la::vector<double>(frames[i])));
+        }
+
+        if (subsample_freq > 1) {
+            inputs = lstm::subsample(inputs, subsample_freq, subsample_shift);
         }
 
         lstm_var_tree = tensor_tree::make_var_tree(graph, param);
@@ -208,21 +228,29 @@ void learning_env::run()
 
         pred_nn = rnn::make_pred_nn(pred_var_tree, nn.layer.back().output);
 
-        auto topo_order = autodiff::topo_order(pred_nn.logprob);
+        std::vector<std::shared_ptr<autodiff::op_t>> logprobs = pred_nn.logprob;
+
+        if (subsample_freq > 1) {
+            logprobs = lstm::upsample(pred_nn.logprob, subsample_freq, subsample_shift, labels.size());
+        }
+
+        auto topo_order = autodiff::topo_order(logprobs);
         autodiff::eval(topo_order, autodiff::eval_funcs);
 
         double loss_sum = 0;
         double nframes = 0;
 
-        for (int t = 0; t < pred_nn.logprob.size(); ++t) {
-            auto& pred = autodiff::get_output<la::vector<double>>(pred_nn.logprob[t]);
+        assert(labels.size() == logprobs.size());
+
+        for (int t = 0; t < labels.size(); ++t) {
+            auto& pred = autodiff::get_output<la::vector<double>>(logprobs[t]);
             la::vector<double> gold;
             gold.resize(label_id.size());
             if (!ebt::in(labels[t], ignored)) {
                 gold(label_id.at(labels[t])) = 1;
             }
             nn::log_loss loss { gold, pred };
-            pred_nn.logprob[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
+            logprobs[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
             if (std::isnan(loss.loss())) {
                 std::cerr << "loss is nan" << std::endl;
                 exit(1);

@@ -71,6 +71,14 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
         double prob);
 
+    std::vector<std::shared_ptr<autodiff::op_t>> subsample(
+        std::vector<std::shared_ptr<autodiff::op_t>> const& input,
+        int freq, int shift);
+
+    std::vector<std::shared_ptr<autodiff::op_t>> upsample(
+        std::vector<std::shared_ptr<autodiff::op_t>> const& input,
+        int freq, int shift, int length);
+
 #if 0
     struct lstm2d_nn_t {
         std::vector<std::shared_ptr<autodiff::op_t>> h_cell;
