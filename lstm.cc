@@ -281,17 +281,98 @@ namespace lstm {
         return result;
     }
 
+    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout_light(
+        autodiff::computation_graph& g,
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        std::default_random_engine& gen, double prob)
+    {
+        stacked_bi_lstm_nn_t result;
+
+        std::bernoulli_distribution bernoulli { 1 - prob };
+
+        std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
+
+        for (int i = 0; i < var_tree->children.size(); ++i) {
+            if (i != 0) {
+                std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
+
+                auto& m = autodiff::get_output<la::matrix<double>>(
+                    get_var(var_tree->children[i]->children[0]->children[0]));
+
+                for (int j = 0; j < f->size(); ++j) {
+                    la::vector<double> v;
+                    v.resize(m.cols());
+                    for (int d = 0; d < v.size(); ++d) {
+                        v(d) = bernoulli(gen);
+                    }
+                    std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
+                    masked_input.push_back(autodiff::emul((*f)[j], input_mask));
+                }
+
+                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
+            } else {
+                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f));
+            }
+
+            f = &result.layer.back().output;
+        }
+
+        return result;
+    }
+
+    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout_light(
+        autodiff::computation_graph& g,
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        double prob)
+    {
+        stacked_bi_lstm_nn_t result;
+
+        std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
+
+        for (int i = 0; i < var_tree->children.size(); ++i) {
+            if (i != 0) {
+                std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
+
+                auto& m = autodiff::get_output<la::matrix<double>>(
+                    get_var(var_tree->children[i]->children[0]->children[0]));
+
+                for (int j = 0; j < f->size(); ++j) {
+                    la::vector<double> v;
+                    v.resize(m.cols());
+                    for (int d = 0; d < v.size(); ++d) {
+                        v(d) = 1 - prob;
+                    }
+                    std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
+                    masked_input.push_back(autodiff::emul((*f)[j], input_mask));
+                }
+
+                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
+            } else {
+                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f));
+            }
+
+            f = &result.layer.back().output;
+        }
+
+        return result;
+    }
+
     std::vector<std::shared_ptr<autodiff::op_t>> subsample(
         std::vector<std::shared_ptr<autodiff::op_t>> const& input,
         int freq, int shift)
     {
         std::vector<std::shared_ptr<autodiff::op_t>> result;
 
+        // std::cout << "subsample: ";
         for (int i = 0; i < input.size(); ++i) {
             if ((i - shift) % freq == 0) {
                 result.push_back(input[i]);
+                // std::cout << i << " ";
             }
         }
+        // std::cout << std::endl;
 
         return result;
     }
@@ -304,15 +385,18 @@ namespace lstm {
 
         int k = 0;
 
+        // std::cout << "upsample: ";
         for (int i = 0; i < length; ++i) {
             if ((i - shift) % freq == 0) {
                 ++k;
             }
 
+            // std::cout << std::max<int>(k - 1, 0) << " ";
             result.push_back(autodiff::add(
                 std::vector<std::shared_ptr<autodiff::op_t>> {
                 input[std::max<int>(k - 1, 0)] }));
         }
+        // std::cout << std::endl;
 
         return result;
     }

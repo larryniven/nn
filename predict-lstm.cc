@@ -44,6 +44,7 @@ int main(int argc, char *argv[])
             {"param", "", true},
             {"label", "", true},
             {"dropout", "", false},
+            {"light-dropout", "", false},
             {"logprob", "", false},
             {"subsample-freq", "", false},
             {"subsample-shift", "", false},
@@ -130,7 +131,11 @@ void prediction_env::run()
         pred_var_tree = tensor_tree::make_var_tree(graph, pred_param);
 
         if (ebt::in(std::string("dropout"), args)) {
-            nn = lstm::make_stacked_bi_lstm_nn_with_dropout(graph, lstm_var_tree, inputs, dropout);
+            if (ebt::in(std::string("light-dropout"), args)) {
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout_light(graph, lstm_var_tree, inputs, dropout);
+            } else {
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout(graph, lstm_var_tree, inputs, dropout);
+            }
         } else {
             nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs);
         }

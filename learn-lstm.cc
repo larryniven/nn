@@ -78,6 +78,7 @@ int main(int argc, char *argv[])
             {"ignored", "", false},
             {"dropout", "", false},
             {"dropout-seed", "", false},
+            {"light-dropout", "", false},
             {"subsample-freq", "", false},
             {"subsample-shift", "", false},
         }
@@ -220,8 +221,13 @@ void learning_env::run()
         pred_var_tree = tensor_tree::make_var_tree(graph, pred_param);
 
         if (ebt::in(std::string("dropout"), args)) {
-            nn = lstm::make_stacked_bi_lstm_nn_with_dropout(
-                graph, lstm_var_tree, inputs, gen, dropout);
+            if (ebt::in(std::string("light-dropout"), args)) {
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout_light(
+                    graph, lstm_var_tree, inputs, gen, dropout);
+            } else {
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout(
+                    graph, lstm_var_tree, inputs, gen, dropout);
+            }
         } else {
             nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs);
         }
@@ -278,6 +284,8 @@ void learning_env::run()
             }
         }
 
+        double v1 = tensor_tree::get_matrix(param->children[0]->children[0]->children[0])(0, 0);
+
         if (ebt::in(std::string("decay"), args)) {
             tensor_tree::rmsprop_update(param, grad, opt_data, decay, step_size);
             tensor_tree::rmsprop_update(pred_param, pred_grad, pred_opt_data, decay, step_size);
@@ -285,6 +293,10 @@ void learning_env::run()
             tensor_tree::adagrad_update(param, grad, opt_data, step_size);
             tensor_tree::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
         }
+
+        double v2 = tensor_tree::get_matrix(param->children[0]->children[0]->children[0])(0, 0);
+
+        std::cout << "weight: " << v1 << " update: " << v2 - v1 << " rate: " << (v2 - v1) / v1 << std::endl;
 
         if (i % save_every == 0) {
             std::ofstream param_ofs { "param-last" };

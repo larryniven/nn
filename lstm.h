@@ -71,6 +71,18 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
         double prob);
 
+    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout_light(
+        autodiff::computation_graph& g,
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        std::default_random_engine& gen, double prob);
+
+    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout_light(
+        autodiff::computation_graph& g,
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        double prob);
+
     std::vector<std::shared_ptr<autodiff::op_t>> subsample(
         std::vector<std::shared_ptr<autodiff::op_t>> const& input,
         int freq, int shift);
