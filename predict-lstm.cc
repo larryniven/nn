@@ -48,6 +48,7 @@ int main(int argc, char *argv[])
             {"logprob", "", false},
             {"subsample-freq", "", false},
             {"subsample-shift", "", false},
+            {"upsample", "", false},
         }
     };
 
@@ -144,7 +145,7 @@ void prediction_env::run()
 
         std::vector<std::shared_ptr<autodiff::op_t>> logprobs = pred_nn.logprob;
 
-        if (subsample_freq > 1) {
+        if (ebt::in(std::string("upsample"), args)) {
             logprobs = lstm::upsample(pred_nn.logprob, subsample_freq, subsample_shift, frames.size());
         }
 

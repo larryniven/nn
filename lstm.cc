@@ -359,6 +359,21 @@ namespace lstm {
         return result;
     }
 
+    std::vector<std::string> subsample(
+        std::vector<std::string> const& input,
+        int freq, int shift)
+    {
+        std::vector<std::string> result;
+
+        for (int i = 0; i < input.size(); ++i) {
+            if ((i - shift) % freq == 0) {
+                result.push_back(input[i]);
+            }
+        }
+
+        return result;
+    }
+
     std::vector<std::shared_ptr<autodiff::op_t>> subsample(
         std::vector<std::shared_ptr<autodiff::op_t>> const& input,
         int freq, int shift)

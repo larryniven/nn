@@ -83,6 +83,10 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
         double prob);
 
+    std::vector<std::string> subsample(
+        std::vector<std::string> const& input,
+        int freq, int shift);
+
     std::vector<std::shared_ptr<autodiff::op_t>> subsample(
         std::vector<std::shared_ptr<autodiff::op_t>> const& input,
         int freq, int shift);

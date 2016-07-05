@@ -234,41 +234,70 @@ void learning_env::run()
 
         pred_nn = rnn::make_pred_nn(pred_var_tree, nn.layer.back().output);
 
-        std::vector<std::shared_ptr<autodiff::op_t>> logprobs = pred_nn.logprob;
-
-        if (subsample_freq > 1) {
-            logprobs = lstm::upsample(pred_nn.logprob, subsample_freq, subsample_shift, labels.size());
-        }
-
-        auto topo_order = autodiff::topo_order(logprobs);
-        autodiff::eval(topo_order, autodiff::eval_funcs);
-
         double loss_sum = 0;
         double nframes = 0;
 
-        assert(labels.size() == logprobs.size());
+        if (ebt::in(std::string("upsample"), args)) {
+            std::vector<std::shared_ptr<autodiff::op_t>> logprobs
+                = lstm::upsample(pred_nn.logprob, subsample_freq, subsample_shift, labels.size());
 
-        for (int t = 0; t < labels.size(); ++t) {
-            auto& pred = autodiff::get_output<la::vector<double>>(logprobs[t]);
-            la::vector<double> gold;
-            gold.resize(label_id.size());
-            if (!ebt::in(labels[t], ignored)) {
-                gold(label_id.at(labels[t])) = 1;
+            auto topo_order = autodiff::topo_order(logprobs);
+            autodiff::eval(topo_order, autodiff::eval_funcs);
+
+            assert(labels.size() == logprobs.size());
+
+            for (int t = 0; t < labels.size(); ++t) {
+                auto& pred = autodiff::get_output<la::vector<double>>(logprobs[t]);
+                la::vector<double> gold;
+                gold.resize(label_id.size());
+                if (!ebt::in(labels[t], ignored)) {
+                    gold(label_id.at(labels[t])) = 1;
+                }
+                nn::log_loss loss { gold, pred };
+                logprobs[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
+                if (std::isnan(loss.loss())) {
+                    std::cerr << "loss is nan" << std::endl;
+                    exit(1);
+                } else {
+                    loss_sum += loss.loss();
+                    nframes += 1;
+                }
             }
-            nn::log_loss loss { gold, pred };
-            logprobs[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
-            if (std::isnan(loss.loss())) {
-                std::cerr << "loss is nan" << std::endl;
-                exit(1);
-            } else {
-                loss_sum += loss.loss();
-                nframes += 1;
+
+            autodiff::grad(topo_order, autodiff::grad_funcs);
+        } else {
+            std::vector<std::shared_ptr<autodiff::op_t>> logprobs = pred_nn.logprob;
+
+            auto topo_order = autodiff::topo_order(logprobs);
+            autodiff::eval(topo_order, autodiff::eval_funcs);
+
+            std::vector<std::string> subsampled_labels
+                = lstm::subsample(labels, subsample_freq, subsample_shift);
+
+            assert(subsampled_labels.size() == logprobs.size());
+
+            for (int t = 0; t < subsampled_labels.size(); ++t) {
+                auto& pred = autodiff::get_output<la::vector<double>>(logprobs[t]);
+                la::vector<double> gold;
+                gold.resize(label_id.size());
+                if (!ebt::in(subsampled_labels[t], ignored)) {
+                    gold(label_id.at(subsampled_labels[t])) = 1;
+                }
+                nn::log_loss loss { gold, pred };
+                logprobs[t]->grad = std::make_shared<la::vector<double>>(loss.grad());
+                if (std::isnan(loss.loss())) {
+                    std::cerr << "loss is nan" << std::endl;
+                    exit(1);
+                } else {
+                    loss_sum += loss.loss();
+                    nframes += 1;
+                }
             }
+
+            autodiff::grad(topo_order, autodiff::grad_funcs);
         }
 
         std::cout << "loss: " << loss_sum / nframes << std::endl;
-
-        autodiff::grad(topo_order, autodiff::grad_funcs);
 
         std::shared_ptr<tensor_tree::vertex> grad = lstm::make_stacked_bi_lstm_tensor_tree(layer);
         tensor_tree::copy_grad(grad, lstm_var_tree);
