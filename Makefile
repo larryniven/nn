@@ -8,6 +8,7 @@ bin = \
     predict \
     learn-lstm \
     predict-lstm \
+    loss-lstm \
     learn-gru \
     predict-gru \
     learn-residual \
@@ -36,6 +37,9 @@ learn-lstm: learn-lstm.o tensor_tree.o lstm.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 predict-lstm: predict-lstm.o tensor_tree.o lstm.o pred.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+loss-lstm: loss-lstm.o tensor_tree.o lstm.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 learn-gru: gru.o learn-gru.o
