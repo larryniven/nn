@@ -60,6 +60,7 @@ int main(int argc, char *argv[])
             {"light-dropout", "", false},
             {"subsample-freq", "", false},
             {"subsample-shift", "", false},
+            {"upsample", "", false},
         }
     };
 

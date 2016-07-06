@@ -76,11 +76,11 @@ namespace tensor_tree {
         std::vector<std::shared_ptr<vertex>> order = leaves_pre_order(root);
 
         for (auto& v: order) {
-            if (v->type == tensor_tree::tensor_t::vector) {
+            if (v->type == tensor_t::vector) {
                 v->data = std::make_shared<la::vector<double>>(
                     ebt::json::load<la::vector<double>>(is));
                 std::getline(is, line);
-            } else if (v->type == tensor_tree::tensor_t::matrix) {
+            } else if (v->type == tensor_t::matrix) {
                 v->data = std::make_shared<la::matrix<double>>(
                     ebt::json::load<la::matrix<double>>(is));
                 std::getline(is, line);
@@ -275,6 +275,40 @@ namespace tensor_tree {
                     get_data<la::matrix<double>>(grad_order[i]),
                     get_data<la::matrix<double>>(opt_data_order[i]),
                     decay, step_size);
+            }
+        }
+    }
+
+    void adam_update(std::shared_ptr<vertex> param,
+        std::shared_ptr<vertex> grad,
+        std::shared_ptr<vertex> first_moment,
+        std::shared_ptr<vertex> second_moment,
+        int time, double alpha, double beta1, double beta2)
+    {
+        auto param_order = leaves_pre_order(param);
+        auto grad_order = leaves_pre_order(grad);
+        auto first_moment_order = leaves_pre_order(first_moment);
+        auto second_moment_order = leaves_pre_order(second_moment);
+
+        assert(param_order.size() == grad_order.size()
+            && grad_order.size() == first_moment_order.size()
+            && first_moment_order.size() == second_moment_order.size());
+
+        for (int i = 0; i < param_order.size(); ++i) {
+            if (grad_order[i]->type == tensor_t::vector) {
+                opt::adam_update(
+                    get_data<la::vector<double>>(param_order[i]),
+                    get_data<la::vector<double>>(grad_order[i]),
+                    get_data<la::vector<double>>(first_moment_order[i]),
+                    get_data<la::vector<double>>(second_moment_order[i]),
+                    time, alpha, beta1, beta2);
+            } else if (grad_order[i]->type == tensor_t::matrix) {
+                opt::adam_update(
+                    get_data<la::matrix<double>>(param_order[i]),
+                    get_data<la::matrix<double>>(grad_order[i]),
+                    get_data<la::matrix<double>>(first_moment_order[i]),
+                    get_data<la::matrix<double>>(second_moment_order[i]),
+                    time, alpha, beta1, beta2);
             }
         }
     }

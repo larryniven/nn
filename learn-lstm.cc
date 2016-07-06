@@ -18,9 +18,13 @@ struct learning_env {
 
     std::shared_ptr<tensor_tree::vertex> param;
     std::shared_ptr<tensor_tree::vertex> opt_data;
+    std::shared_ptr<tensor_tree::vertex> param_first_moment;
+    std::shared_ptr<tensor_tree::vertex> param_second_moment;
 
     std::shared_ptr<tensor_tree::vertex> pred_param;
     std::shared_ptr<tensor_tree::vertex> pred_opt_data;
+    std::shared_ptr<tensor_tree::vertex> pred_first_moment;
+    std::shared_ptr<tensor_tree::vertex> pred_second_moment;
 
     std::shared_ptr<tensor_tree::vertex> lstm_var_tree;
     std::shared_ptr<tensor_tree::vertex> pred_var_tree;
@@ -45,6 +49,10 @@ struct learning_env {
 
     int subsample_freq;
     int subsample_shift;
+
+    int time;
+    double adam_beta1;
+    double adam_beta2;
 
     std::unordered_map<std::string, int> label_id;
 
@@ -81,6 +89,8 @@ int main(int argc, char *argv[])
             {"light-dropout", "", false},
             {"subsample-freq", "", false},
             {"subsample-shift", "", false},
+            {"adam-beta1", "", false},
+            {"adam-beta2", "", false},
         }
     };
 
@@ -124,10 +134,23 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     std::ifstream opt_data_ifs { args.at("opt-data") };
     std::getline(opt_data_ifs, line);
 
-    opt_data = lstm::make_stacked_bi_lstm_tensor_tree(layer);
-    tensor_tree::load_tensor(opt_data, opt_data_ifs);
-    pred_opt_data = nn::make_pred_tensor_tree();
-    tensor_tree::load_tensor(pred_opt_data, opt_data_ifs);
+    if (ebt::in(std::string("adam-beta1"), args)) {
+        time = std::stoi(line);
+        std::getline(opt_data_ifs, line);
+        param_first_moment = lstm::make_stacked_bi_lstm_tensor_tree(layer);
+        tensor_tree::load_tensor(param_first_moment, opt_data_ifs);
+        param_second_moment = lstm::make_stacked_bi_lstm_tensor_tree(layer);
+        tensor_tree::load_tensor(param_second_moment, opt_data_ifs);
+        pred_first_moment = nn::make_pred_tensor_tree();
+        tensor_tree::load_tensor(pred_first_moment, opt_data_ifs);
+        pred_second_moment = nn::make_pred_tensor_tree();
+        tensor_tree::load_tensor(pred_second_moment, opt_data_ifs);
+    } else {
+        opt_data = lstm::make_stacked_bi_lstm_tensor_tree(layer);
+        tensor_tree::load_tensor(opt_data, opt_data_ifs);
+        pred_opt_data = nn::make_pred_tensor_tree();
+        tensor_tree::load_tensor(pred_opt_data, opt_data_ifs);
+    }
     opt_data_ifs.close();
 
     if (ebt::in(std::string("save-every"), args)) {
@@ -182,6 +205,14 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
 
     if (ebt::in(std::string("subsample-shift"), args)) {
         subsample_shift = std::stoi(args.at("subsample-shift"));
+    }
+
+    if (ebt::in(std::string("adam-beta1"), args)) {
+        adam_beta1 = std::stod(args.at("adam-beta1"));
+    }
+
+    if (ebt::in(std::string("adam-beta2"), args)) {
+        adam_beta2 = std::stod(args.at("adam-beta2"));
     }
 }
 
@@ -321,6 +352,11 @@ void learning_env::run()
         if (ebt::in(std::string("decay"), args)) {
             tensor_tree::rmsprop_update(param, grad, opt_data, decay, step_size);
             tensor_tree::rmsprop_update(pred_param, pred_grad, pred_opt_data, decay, step_size);
+        } if (ebt::in(std::string("adam-beta1"), args)) {
+            tensor_tree::adam_update(param, grad, param_first_moment, param_second_moment,
+                time, step_size, adam_beta1, adam_beta2);
+            tensor_tree::adam_update(pred_param, pred_grad, pred_first_moment, pred_second_moment,
+                time, step_size, adam_beta1, adam_beta2);
         } else {
             tensor_tree::adagrad_update(param, grad, opt_data, step_size);
             tensor_tree::adagrad_update(pred_param, pred_grad, pred_opt_data, step_size);
@@ -337,11 +373,22 @@ void learning_env::run()
             tensor_tree::save_tensor(pred_param, param_ofs);
             param_ofs.close();
 
-            std::ofstream opt_data_ofs { "opt-data-last" };
-            opt_data_ofs << layer << std::endl;
-            tensor_tree::save_tensor(opt_data, opt_data_ofs);
-            tensor_tree::save_tensor(pred_opt_data, opt_data_ofs);
-            opt_data_ofs.close();
+            if (ebt::in(std::string("adam-beta1"), args)) {
+                std::ofstream opt_data_ofs { "opt-data-last" };
+                opt_data_ofs << time << std::endl;
+                opt_data_ofs << layer << std::endl;
+                tensor_tree::save_tensor(param_first_moment, opt_data_ofs);
+                tensor_tree::save_tensor(param_second_moment, opt_data_ofs);
+                tensor_tree::save_tensor(pred_first_moment, opt_data_ofs);
+                tensor_tree::save_tensor(pred_second_moment, opt_data_ofs);
+                opt_data_ofs.close();
+            } else {
+                std::ofstream opt_data_ofs { "opt-data-last" };
+                opt_data_ofs << layer << std::endl;
+                tensor_tree::save_tensor(opt_data, opt_data_ofs);
+                tensor_tree::save_tensor(pred_opt_data, opt_data_ofs);
+                opt_data_ofs.close();
+            }
         }
 
 #if DEBUG_TOP
@@ -351,6 +398,7 @@ void learning_env::run()
 #endif
 
         ++i;
+        ++time;
     }
 
     std::ofstream param_ofs { output_param };
@@ -359,10 +407,21 @@ void learning_env::run()
     tensor_tree::save_tensor(pred_param, param_ofs);
     param_ofs.close();
 
-    std::ofstream opt_data_ofs { output_opt_data };
-    opt_data_ofs << layer << std::endl;
-    tensor_tree::save_tensor(opt_data, opt_data_ofs);
-    tensor_tree::save_tensor(pred_opt_data, opt_data_ofs);
-    opt_data_ofs.close();
+    if (ebt::in(std::string("adam-beta1"), args)) {
+        std::ofstream opt_data_ofs { output_opt_data };
+        opt_data_ofs << time << std::endl;
+        opt_data_ofs << layer << std::endl;
+        tensor_tree::save_tensor(param_first_moment, opt_data_ofs);
+        tensor_tree::save_tensor(param_second_moment, opt_data_ofs);
+        tensor_tree::save_tensor(pred_first_moment, opt_data_ofs);
+        tensor_tree::save_tensor(pred_second_moment, opt_data_ofs);
+        opt_data_ofs.close();
+    } else {
+        std::ofstream opt_data_ofs { output_opt_data };
+        opt_data_ofs << layer << std::endl;
+        tensor_tree::save_tensor(opt_data, opt_data_ofs);
+        tensor_tree::save_tensor(pred_opt_data, opt_data_ofs);
+        opt_data_ofs.close();
+    }
 }
 

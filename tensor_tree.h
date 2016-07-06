@@ -63,6 +63,12 @@ namespace tensor_tree {
     void rmsprop_update(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
         std::shared_ptr<vertex> opt_data, double decay, double step_size);
 
+    void adam_update(std::shared_ptr<vertex> param,
+        std::shared_ptr<vertex> grad,
+        std::shared_ptr<vertex> first_moment,
+        std::shared_ptr<vertex> second_moment,
+        int time, double alpha, double beta1, double beta2);
+
     std::shared_ptr<vertex> make_var_tree(autodiff::computation_graph& g,
         std::shared_ptr<vertex> root);
 
