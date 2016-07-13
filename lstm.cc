@@ -94,8 +94,11 @@ namespace lstm {
         return result;
     }
 
-    lstm_nn_t make_lstm_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat)
+    lstm_builder::~lstm_builder()
+    {}
+
+    lstm_nn_t lstm_builder::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
     {
         lstm_nn_t result;
 
@@ -129,15 +132,16 @@ namespace lstm {
     }
 
     bi_lstm_nn_t make_bi_lstm_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat)
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        lstm_builder const& builder)
     {
         bi_lstm_nn_t result;
 
-        result.forward_nn = make_lstm_nn(var_tree->children[0], feat);
+        result.forward_nn = builder(var_tree->children[0], feat);
 
         std::vector<std::shared_ptr<autodiff::op_t>> rev_feat = feat;
         std::reverse(rev_feat.begin(), rev_feat.end());
-        result.backward_nn = make_lstm_nn(var_tree->children[1], rev_feat);
+        result.backward_nn = builder(var_tree->children[1], rev_feat);
         std::reverse(result.backward_nn.cell.begin(), result.backward_nn.cell.end());
         std::reverse(result.backward_nn.output.begin(), result.backward_nn.output.end());
 
@@ -165,14 +169,15 @@ namespace lstm {
 
     stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat)
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        lstm_builder const& builder)
     {
         stacked_bi_lstm_nn_t result;
 
         std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
 
         for (int i = 0; i < var_tree->children.size(); ++i) {
-            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f));
+            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f, builder));
             f = &result.layer.back().output;
         }
 
@@ -183,6 +188,7 @@ namespace lstm {
         autodiff::computation_graph& g,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        lstm_builder const& builder,
         std::default_random_engine& gen, double prob)
     {
         stacked_bi_lstm_nn_t result;
@@ -207,7 +213,7 @@ namespace lstm {
                 masked_input.push_back(autodiff::emul((*f)[j], input_mask));
             }
 
-            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
+            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input, builder));
 
             f = &result.layer.back().output;
         }
@@ -235,6 +241,7 @@ namespace lstm {
         autodiff::computation_graph& g,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        lstm_builder const& builder,
         double prob)
     {
         stacked_bi_lstm_nn_t result;
@@ -257,7 +264,7 @@ namespace lstm {
                 masked_input.push_back(autodiff::emul((*f)[j], input_mask));
             }
 
-            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
+            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input, builder));
 
             f = &result.layer.back().output;
         }
@@ -285,6 +292,7 @@ namespace lstm {
         autodiff::computation_graph& g,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        lstm_builder const& builder,
         std::default_random_engine& gen, double prob)
     {
         stacked_bi_lstm_nn_t result;
@@ -310,9 +318,9 @@ namespace lstm {
                     masked_input.push_back(autodiff::emul((*f)[j], input_mask));
                 }
 
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
+                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input, builder));
             } else {
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f));
+                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f, builder));
             }
 
             f = &result.layer.back().output;
@@ -325,6 +333,7 @@ namespace lstm {
         autodiff::computation_graph& g,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        lstm_builder const& builder,
         double prob)
     {
         stacked_bi_lstm_nn_t result;
@@ -348,9 +357,9 @@ namespace lstm {
                     masked_input.push_back(autodiff::emul((*f)[j], input_mask));
                 }
 
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input));
+                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input, builder));
             } else {
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f));
+                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f, builder));
             }
 
             f = &result.layer.back().output;
@@ -414,6 +423,45 @@ namespace lstm {
         // std::cout << std::endl;
 
         return result;
+    }
+
+    lstm_nn_t make_zoneout_lstm_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& mask,
+        std::shared_ptr<autodiff::op_t> one)
+    {
+        lstm_nn_t result;
+
+        std::shared_ptr<autodiff::op_t> cell = nullptr;
+        std::shared_ptr<autodiff::op_t> output = nullptr;
+
+        for (int i = 0; i < feat.size(); ++i) {
+            lstm_step_nn_t step_nn = make_lstm_step_nn(var_tree, cell, output, feat[i]);
+
+            auto inv_mask = autodiff::sub(one, mask[i]);
+
+            cell = autodiff::add(autodiff::emul(mask[i], cell),
+                autodiff::emul(inv_mask, step_nn.cell));
+            output = autodiff::add(autodiff::emul(mask[i], output),
+                autodiff::emul(inv_mask, step_nn.output));
+
+            result.cell.push_back(cell);
+            result.output.push_back(output);
+        }
+
+        return result;
+    }
+
+    zoneout_lstm_builder::zoneout_lstm_builder(
+            std::vector<std::shared_ptr<autodiff::op_t>> const& mask,
+            std::shared_ptr<autodiff::op_t> one)
+        : mask(mask), one(one)
+    {}
+
+    lstm_nn_t zoneout_lstm_builder::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
+    {
+        return make_zoneout_lstm_nn(var_tree, feat, mask, one);
     }
 
 #if 0

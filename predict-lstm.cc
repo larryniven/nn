@@ -133,12 +133,12 @@ void prediction_env::run()
 
         if (ebt::in(std::string("dropout"), args)) {
             if (ebt::in(std::string("light-dropout"), args)) {
-                nn = lstm::make_stacked_bi_lstm_nn_with_dropout_light(graph, lstm_var_tree, inputs, dropout);
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout_light(graph, lstm_var_tree, inputs, lstm::lstm_builder{}, dropout);
             } else {
-                nn = lstm::make_stacked_bi_lstm_nn_with_dropout(graph, lstm_var_tree, inputs, dropout);
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout(graph, lstm_var_tree, inputs, lstm::lstm_builder{}, dropout);
             }
         } else {
-            nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs);
+            nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, lstm::lstm_builder{});
         }
 
         pred_nn = rnn::make_pred_nn(pred_var_tree, nn.layer.back().output);
