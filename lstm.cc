@@ -440,10 +440,19 @@ namespace lstm {
 
             auto inv_mask = autodiff::sub(one, mask[i]);
 
-            cell = autodiff::add(autodiff::emul(mask[i], cell),
-                autodiff::emul(inv_mask, step_nn.cell));
-            output = autodiff::add(autodiff::emul(mask[i], output),
-                autodiff::emul(inv_mask, step_nn.output));
+            if (cell != nullptr) {
+                cell = autodiff::add(autodiff::emul(mask[i], cell),
+                    autodiff::emul(inv_mask, step_nn.cell));
+            } else {
+                cell = step_nn.cell;
+            }
+
+            if (output != nullptr) {
+                output = autodiff::add(autodiff::emul(mask[i], output),
+                    autodiff::emul(inv_mask, step_nn.output));
+            } else {
+                output = step_nn.output;
+            }
 
             result.cell.push_back(cell);
             result.output.push_back(output);

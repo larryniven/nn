@@ -91,6 +91,7 @@ int main(int argc, char *argv[])
             {"subsample-shift", "", false},
             {"adam-beta1", "", false},
             {"adam-beta2", "", false},
+            {"clockwork", "", false}
         }
     };
 
@@ -259,6 +260,41 @@ void learning_env::run()
                 nn = lstm::make_stacked_bi_lstm_nn_with_dropout(
                     graph, lstm_var_tree, inputs, lstm::lstm_builder{}, gen, dropout);
             }
+        } else if (ebt::in(std::string("clockwork"), args)) {
+            la::vector<double> one_vec;
+            one_vec.resize(tensor_tree::get_matrix(param->children[0]->children[0]->children[0]).rows(), 1);
+            std::shared_ptr<autodiff::op_t> one = graph.var(one_vec);
+
+            std::vector<std::shared_ptr<autodiff::op_t>> mask;
+
+            for (int i = 0; i < inputs.size(); ++i) {
+                la::vector<double> mask_vec;
+                mask_vec.resize(one_vec.size());
+
+                for (int d = 0; d < mask_vec.size(); ++d) {
+                    if (d < mask_vec.size() / 2.0) {
+                        mask_vec(d) = 0;
+                    } else if (mask_vec.size() / 2.0 <= d && d < mask_vec.size() * 3 / 4.0) {
+                        if (i % 2 == 0) {
+                            mask_vec(d) = 0;
+                        } else {
+                            mask_vec(d) = 1;
+                        }
+                    } else {
+                        if (i % 4 == 0) {
+                            mask_vec(d) = 0;
+                        } else {
+                            mask_vec(d) = 1;
+                        }
+                    }
+                }
+
+                mask.push_back(graph.var(mask_vec));
+            }
+
+            lstm::zoneout_lstm_builder builder { mask, one };
+
+            nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, builder);
         } else {
             nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, lstm::lstm_builder{});
         }
