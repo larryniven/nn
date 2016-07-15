@@ -113,7 +113,7 @@ namespace lstm {
     struct zoneout_lstm_builder
         : public lstm_builder {
 
-        std::vector<std::shared_ptr<autodiff::op_t>> const& mask;
+        std::vector<std::shared_ptr<autodiff::op_t>> mask;
         std::shared_ptr<autodiff::op_t> one;
 
         zoneout_lstm_builder(std::vector<std::shared_ptr<autodiff::op_t>> const& mask,

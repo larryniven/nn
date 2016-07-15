@@ -303,8 +303,6 @@ void learning_env::run()
             nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, *builder);
         }
 
-        delete builder;
-
         pred_nn = rnn::make_pred_nn(pred_var_tree, nn.layer.back().output);
 
         double loss_sum = 0;
@@ -438,6 +436,8 @@ void learning_env::run()
             break;
         }
 #endif
+
+        delete builder;
 
         ++i;
         ++time;

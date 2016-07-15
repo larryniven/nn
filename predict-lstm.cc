@@ -228,6 +228,8 @@ void prediction_env::run()
 
         std::cout << "." << std::endl;
 
+        delete builder;
+
         ++i;
     }
 }
