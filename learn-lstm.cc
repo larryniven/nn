@@ -252,15 +252,9 @@ void learning_env::run()
         lstm_var_tree = tensor_tree::make_var_tree(graph, param);
         pred_var_tree = tensor_tree::make_var_tree(graph, pred_param);
 
-        if (ebt::in(std::string("dropout"), args)) {
-            if (ebt::in(std::string("light-dropout"), args)) {
-                nn = lstm::make_stacked_bi_lstm_nn_with_dropout_light(
-                    graph, lstm_var_tree, inputs, lstm::lstm_builder{}, gen, dropout);
-            } else {
-                nn = lstm::make_stacked_bi_lstm_nn_with_dropout(
-                    graph, lstm_var_tree, inputs, lstm::lstm_builder{}, gen, dropout);
-            }
-        } else if (ebt::in(std::string("clockwork"), args)) {
+        lstm::lstm_builder *builder;
+
+        if (ebt::in(std::string("clockwork"), args)) {
             la::vector<double> one_vec;
             one_vec.resize(tensor_tree::get_matrix(param->children[0]->children[0]->children[0]).rows(), 1);
             std::shared_ptr<autodiff::op_t> one = graph.var(one_vec);
@@ -292,12 +286,24 @@ void learning_env::run()
                 mask.push_back(graph.var(mask_vec));
             }
 
-            lstm::zoneout_lstm_builder builder { mask, one };
-
-            nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, builder);
+            builder = new lstm::zoneout_lstm_builder { mask, one };
         } else {
-            nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, lstm::lstm_builder{});
+            builder = new lstm::lstm_builder{};
         }
+
+        if (ebt::in(std::string("dropout"), args)) {
+            if (ebt::in(std::string("light-dropout"), args)) {
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout_light(
+                    graph, lstm_var_tree, inputs, *builder, gen, dropout);
+            } else {
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout(
+                    graph, lstm_var_tree, inputs, *builder, gen, dropout);
+            }
+        } else {
+            nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, *builder);
+        }
+
+        delete builder;
 
         pred_nn = rnn::make_pred_nn(pred_var_tree, nn.layer.back().output);
 

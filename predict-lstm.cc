@@ -49,6 +49,7 @@ int main(int argc, char *argv[])
             {"subsample-freq", "", false},
             {"subsample-shift", "", false},
             {"upsample", "", false},
+            {"clockwork", "", false},
         }
     };
 
@@ -131,11 +132,52 @@ void prediction_env::run()
         lstm_var_tree = tensor_tree::make_var_tree(graph, param);
         pred_var_tree = tensor_tree::make_var_tree(graph, pred_param);
 
+        lstm::lstm_builder *builder;
+
+        if (ebt::in(std::string("clockwork"), args)) {
+            la::vector<double> one_vec;
+            one_vec.resize(tensor_tree::get_matrix(param->children[0]->children[0]->children[0]).rows(), 1);
+            std::shared_ptr<autodiff::op_t> one = graph.var(one_vec);
+
+            std::vector<std::shared_ptr<autodiff::op_t>> mask;
+
+            for (int i = 0; i < inputs.size(); ++i) {
+                la::vector<double> mask_vec;
+                mask_vec.resize(one_vec.size());
+
+                for (int d = 0; d < mask_vec.size(); ++d) {
+                    if (d < mask_vec.size() / 2.0) {
+                        mask_vec(d) = 0;
+                    } else if (mask_vec.size() / 2.0 <= d && d < mask_vec.size() * 3 / 4.0) {
+                        if (i % 2 == 0) {
+                            mask_vec(d) = 0;
+                        } else {
+                            mask_vec(d) = 1;
+                        }
+                    } else {
+                        if (i % 4 == 0) {
+                            mask_vec(d) = 0;
+                        } else {
+                            mask_vec(d) = 1;
+                        }
+                    }
+                }
+
+                mask.push_back(graph.var(mask_vec));
+            }
+
+            builder = new lstm::zoneout_lstm_builder { mask, one };
+        } else {
+            builder = new lstm::lstm_builder{};
+        }
+
         if (ebt::in(std::string("dropout"), args)) {
             if (ebt::in(std::string("light-dropout"), args)) {
-                nn = lstm::make_stacked_bi_lstm_nn_with_dropout_light(graph, lstm_var_tree, inputs, lstm::lstm_builder{}, dropout);
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout_light(
+                    graph, lstm_var_tree, inputs, *builder, dropout);
             } else {
-                nn = lstm::make_stacked_bi_lstm_nn_with_dropout(graph, lstm_var_tree, inputs, lstm::lstm_builder{}, dropout);
+                nn = lstm::make_stacked_bi_lstm_nn_with_dropout(
+                    graph, lstm_var_tree, inputs, *builder, dropout);
             }
         } else {
             nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, lstm::lstm_builder{});
