@@ -180,7 +180,7 @@ void prediction_env::run()
                     graph, lstm_var_tree, inputs, *builder, dropout);
             }
         } else {
-            nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, lstm::lstm_builder{});
+            nn = lstm::make_stacked_bi_lstm_nn(lstm_var_tree, inputs, *builder);
         }
 
         pred_nn = rnn::make_pred_nn(pred_var_tree, nn.layer.back().output);
