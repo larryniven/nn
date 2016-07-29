@@ -181,6 +181,19 @@ namespace tensor_tree {
         }
     }
 
+    void zero(std::shared_ptr<vertex> root)
+    {
+        auto order = leaves_pre_order(root);
+
+        for (auto& t: order) {
+            if (t->type == tensor_t::vector) {
+                la::zero(get_data<la::vector<double>>(t));
+            } else if (t->type == tensor_t::matrix) {
+                la::zero(get_data<la::matrix<double>>(t));
+            }
+        }
+    }
+
     double norm(std::shared_ptr<vertex> root)
     {
         auto order = leaves_pre_order(root);
