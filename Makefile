@@ -13,6 +13,8 @@ bin = \
     predict-gru \
     learn-residual \
     predict-residual \
+    learn-lstm-seg \
+    predict-lstm-seg \
     libnn.a
 
 all: $(bin)
@@ -52,6 +54,12 @@ learn-residual: learn-residual.o residual.o pred.o nn.o tensor_tree.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 predict-residual: predict-residual.o residual.o pred.o tensor_tree.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+learn-lstm-seg: learn-lstm-seg.o tensor_tree.o lstm.o pred.o nn.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+predict-lstm-seg: predict-lstm-seg.o tensor_tree.o lstm.o pred.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 nn.o: nn.h

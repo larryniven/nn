@@ -421,7 +421,11 @@ namespace tensor_tree {
         for (int i = 0; i < result_order.size(); ++i) {
             assert(var_tree_order[i]->type == tensor_t::autodiff_var);
 
-            result_order[i]->data = get_var(var_tree_order[i])->grad;
+            auto grad = get_var(var_tree_order[i])->grad;
+
+            if (grad != nullptr) {
+                result_order[i]->data = grad;
+            }
         }
     }
 
