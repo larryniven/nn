@@ -38,6 +38,9 @@ struct prediction_env {
     void predict_sample(
         std::vector<std::vector<double>> const& frames);
 
+    void predict_sample_label_indep(
+        std::vector<std::vector<double>> const& frames);
+
 };
 
 std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer);
@@ -53,6 +56,8 @@ int main(int argc, char *argv[])
             {"param", "", true},
             {"label", "", true},
             {"dropout", "", false},
+            {"print-attention", "", false},
+            {"label-indep-att", "", false},
         }
     };
 
@@ -137,7 +142,11 @@ void prediction_env::run()
                 continue;
             }
 
-            predict_sample(seg_frames);
+            if (ebt::in(std::string("label-indep-att"), args)) {
+                predict_sample_label_indep(seg_frames);
+            } else {
+                predict_sample(seg_frames);
+            }
         }
 
         std::cout << "." << std::endl;
@@ -172,12 +181,14 @@ void prediction_env::predict_sample(
     }
 
     std::shared_ptr<autodiff::op_t> hs = autodiff::col_cat(nn.layer.back().output);
-    std::shared_ptr<autodiff::op_t> att_weight = autodiff::mmul(tensor_tree::get_var(var_tree->children[1]), hs);
+    std::shared_ptr<autodiff::op_t> pre_att = autodiff::mmul(tensor_tree::get_var(var_tree->children[1]), hs);
     std::vector<std::shared_ptr<autodiff::op_t>> feats;
+    std::vector<std::shared_ptr<autodiff::op_t>> atts;
 
     for (int i = 0; i < label_id.size(); ++i) {
-        std::shared_ptr<autodiff::op_t> norm_att_weight = autodiff::softmax(autodiff::row_at(att_weight, i));
-        feats.push_back(autodiff::mul(hs, norm_att_weight));
+        std::shared_ptr<autodiff::op_t> att = autodiff::softmax(autodiff::row_at(pre_att, i));
+        atts.push_back(att);
+        feats.push_back(autodiff::mul(hs, att));
     }
 
     std::shared_ptr<autodiff::op_t> pred_var = autodiff::logsoftmax(
@@ -189,6 +200,9 @@ void prediction_env::predict_sample(
     double max = -std::numeric_limits<double>::infinity();
     int argmax = -1;
 
+    double min = std::numeric_limits<double>::infinity();
+    int argmin = -1;
+
     auto& pred = autodiff::get_output<la::vector_like<double>>(pred_var);
 
     for (int i = 0; i < pred.size(); ++i) {
@@ -196,8 +210,83 @@ void prediction_env::predict_sample(
             argmax = i;
             max = pred(i);
         }
+
+        if (pred(i) < min) {
+            argmin = i;
+            min = pred(i);
+        }
     }
 
-    std::cout << id_label[argmax] << std::endl;
+    if (ebt::in(std::string("print-attention"), args)) {
+        la::vector<double>& u = autodiff::get_output<la::vector<double>>(atts[argmax]);
+        std::cout << id_label[argmax] << " ";
+        std::cout << std::vector<double> { u.data(), u.data() + u.size() } << std::endl;
+
+        la::vector<double>& v = autodiff::get_output<la::vector<double>>(atts[argmin]);
+        std::cout << id_label[argmin] << " ";
+        std::cout << std::vector<double> { v.data(), v.data() + v.size() } << std::endl;
+
+        std::cout << std::endl;
+    } else {
+        std::cout << id_label[argmax] << std::endl;
+    }
+}
+
+void prediction_env::predict_sample_label_indep(
+    std::vector<std::vector<double>> const& frames)
+{
+    autodiff::computation_graph graph;
+    std::vector<std::shared_ptr<autodiff::op_t>> inputs;
+
+    for (int i = 0; i < frames.size(); ++i) {
+        inputs.push_back(graph.var(la::vector<double>(frames[i])));
+    }
+
+    var_tree = tensor_tree::make_var_tree(graph, param);
+
+    if (ebt::in(std::string("dropout"), args)) {
+        nn = lstm::make_stacked_bi_lstm_nn_with_dropout(
+            graph, var_tree->children.front(), inputs, lstm::lstm_builder{}, dropout);
+    } else {
+        nn = lstm::make_stacked_bi_lstm_nn(var_tree->children.front(), inputs, lstm::lstm_builder{});
+    }
+
+    std::shared_ptr<autodiff::op_t> hs = autodiff::col_cat(nn.layer.back().output);
+    std::shared_ptr<autodiff::op_t> att_weight = autodiff::softmax(autodiff::lmul(tensor_tree::get_var(var_tree->children[2]), hs));
+    std::shared_ptr<autodiff::op_t> phi = autodiff::mul(hs, att_weight);
+
+    std::shared_ptr<autodiff::op_t> pred_var = autodiff::logsoftmax(
+        autodiff::mul(tensor_tree::get_var(var_tree->children[1]), phi));
+
+    auto topo_order = autodiff::topo_order(pred_var);
+    autodiff::eval(topo_order, autodiff::eval_funcs);
+
+    double max = -std::numeric_limits<double>::infinity();
+    int argmax = -1;
+
+    double min = std::numeric_limits<double>::infinity();
+    int argmin = -1;
+
+    auto& pred = autodiff::get_output<la::vector_like<double>>(pred_var);
+
+    for (int i = 0; i < pred.size(); ++i) {
+        if (pred(i) > max) {
+            argmax = i;
+            max = pred(i);
+        }
+
+        if (pred(i) < min) {
+            argmin = i;
+            min = pred(i);
+        }
+    }
+
+    if (ebt::in(std::string("print-attention"), args)) {
+        la::vector<double>& u = autodiff::get_output<la::vector<double>>(att_weight);
+        std::cout << id_label[argmax] << " ";
+        std::cout << std::vector<double> { u.data(), u.data() + u.size() } << std::endl;
+    } else {
+        std::cout << id_label[argmax] << std::endl;
+    }
 }
 

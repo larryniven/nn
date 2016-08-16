@@ -60,6 +60,10 @@ struct learning_env {
         std::vector<std::vector<double>> const& frames,
         std::string const& label);
 
+    void learn_sample_label_indep(
+        std::vector<std::vector<double>> const& frames,
+        std::string const& label);
+
 };
 
 std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer);
@@ -86,6 +90,7 @@ int main(int argc, char *argv[])
             {"dropout-seed", "", false},
             {"adam-beta1", "", false},
             {"adam-beta2", "", false},
+            {"label-indep-att", "", false}
         }
     };
 
@@ -234,7 +239,11 @@ void learning_env::run()
                 continue;
             }
 
-            learn_sample(seg_frames, segs[i].label);
+            if (ebt::in(std::string("label-indep-att"), args)) {
+                learn_sample_label_indep(seg_frames, segs[i].label);
+            } else {
+                learn_sample(seg_frames, segs[i].label);
+            }
         }
 
         if (i % save_every == 0) {
@@ -319,6 +328,84 @@ void learning_env::learn_sample(
 
     std::shared_ptr<autodiff::op_t> pred_var = autodiff::logsoftmax(
         autodiff::mul(autodiff::row_cat(feats), tensor_tree::get_var(var_tree->children[2])));
+
+    auto topo_order = autodiff::topo_order(pred_var);
+    autodiff::eval(topo_order, autodiff::eval_funcs);
+
+    la::vector<double> gold;
+    gold.resize(label_id.size());
+    gold(label_id.at(label)) = 1;
+
+    la::vector<double>& pred = autodiff::get_output<la::vector<double>>(pred_var);
+
+    nn::log_loss loss { gold, pred };
+    pred_var->grad = std::make_shared<la::vector<double>>(loss.grad());
+
+    if (std::isnan(loss.loss())) {
+        std::cerr << "loss is nan" << std::endl;
+        exit(1);
+    }
+
+    std::cout << "loss: " << loss.loss() << std::endl;
+
+    autodiff::grad(topo_order, autodiff::grad_funcs);
+
+    std::shared_ptr<tensor_tree::vertex> grad = make_tensor_tree(layer);
+    tensor_tree::resize_as(grad, param);
+    tensor_tree::copy_grad(grad, var_tree);
+
+    if (ebt::in(std::string("clip"), args)) {
+        double n = tensor_tree::norm(grad);
+
+        if (n > clip) {
+            tensor_tree::imul(grad, clip / n);
+            std::cout << "norm: " << n << " clip: " << clip << " gradient clipped" << std::endl;
+        }
+    }
+
+    double v1 = tensor_tree::get_matrix(param->children.front()->children[0]->children[0]->children[0])(0, 0);
+
+    if (ebt::in(std::string("decay"), args)) {
+        tensor_tree::rmsprop_update(param, grad, opt_data, decay, step_size);
+    } if (ebt::in(std::string("adam-beta1"), args)) {
+        tensor_tree::adam_update(param, grad, param_first_moment, param_second_moment,
+            time, step_size, adam_beta1, adam_beta2);
+    } else {
+        tensor_tree::adagrad_update(param, grad, opt_data, step_size);
+    }
+
+    double v2 = tensor_tree::get_matrix(param->children.front()->children[0]->children[0]->children[0])(0, 0);
+
+    std::cout << "weight: " << v1 << " update: " << v2 - v1 << " rate: " << (v2 - v1) / v1 << std::endl;
+
+}
+
+void learning_env::learn_sample_label_indep(
+    std::vector<std::vector<double>> const& frames,
+    std::string const& label)
+{
+    autodiff::computation_graph graph;
+    std::vector<std::shared_ptr<autodiff::op_t>> inputs;
+
+    for (int i = 0; i < frames.size(); ++i) {
+        inputs.push_back(graph.var(la::vector<double>(frames[i])));
+    }
+
+    var_tree = tensor_tree::make_var_tree(graph, param);
+
+    if (ebt::in(std::string("dropout"), args)) {
+        nn = lstm::make_stacked_bi_lstm_nn_with_dropout(
+            graph, var_tree->children.front(), inputs, lstm::lstm_builder{}, gen, dropout);
+    } else {
+        nn = lstm::make_stacked_bi_lstm_nn(var_tree->children.front(), inputs, lstm::lstm_builder{});
+    }
+
+    std::shared_ptr<autodiff::op_t> hs = autodiff::col_cat(nn.layer.back().output);
+    std::shared_ptr<autodiff::op_t> att_weight = autodiff::softmax(autodiff::lmul(tensor_tree::get_var(var_tree->children[2]), hs));
+    std::shared_ptr<autodiff::op_t> phi = autodiff::mul(hs, att_weight);
+
+    std::shared_ptr<autodiff::op_t> pred_var = autodiff::logsoftmax(
+        autodiff::mul(tensor_tree::get_var(var_tree->children[1]), phi));
 
     auto topo_order = autodiff::topo_order(pred_var);
     autodiff::eval(topo_order, autodiff::eval_funcs);
