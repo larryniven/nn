@@ -10,6 +10,7 @@
 #include "nn/nn.h"
 #include <random>
 #include "nn/tensor_tree.h"
+#include "nn/lstm-seg.h"
 
 struct learning_env {
 
@@ -62,12 +63,10 @@ struct learning_env {
 
 };
 
-std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer);
-
 int main(int argc, char *argv[])
 {
     ebt::ArgumentSpec spec {
-        "learn-lstm-seg",
+        "learn-lstm-seg-label-indep-att",
         "Train a LSTM frame classifier",
         {
             {"frame-batch", "", true},
@@ -86,6 +85,8 @@ int main(int argc, char *argv[])
             {"dropout-seed", "", false},
             {"adam-beta1", "", false},
             {"adam-beta2", "", false},
+            {"uniform-att", "", false},
+            {"endpoints", "", false},
         }
     };
 
@@ -108,15 +109,6 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer)
-{
-    tensor_tree::vertex v { tensor_tree::tensor_t::nil };
-    v.children.push_back(lstm::make_stacked_bi_lstm_tensor_tree(layer));
-    v.children.push_back(tensor_tree::make_matrix());
-    v.children.push_back(tensor_tree::make_vector());
-    return std::make_shared<tensor_tree::vertex>(v);
-}
-
 learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     : args(args)
 {
@@ -128,7 +120,7 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     std::ifstream param_ifs { args.at("param") };
     std::getline(param_ifs, line);
     layer = std::stoi(line);
-    param = make_tensor_tree(layer);
+    param = lstm_seg::make_tensor_tree(layer, args);
     tensor_tree::load_tensor(param, param_ifs);
     param_ifs.close();
 
@@ -138,12 +130,12 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     if (ebt::in(std::string("adam-beta1"), args)) {
         time = std::stoi(line);
         std::getline(opt_data_ifs, line);
-        param_first_moment = make_tensor_tree(layer);
+        param_first_moment = lstm_seg::make_tensor_tree(layer, args);
         tensor_tree::load_tensor(param_first_moment, opt_data_ifs);
-        param_second_moment = make_tensor_tree(layer);
+        param_second_moment = lstm_seg::make_tensor_tree(layer, args);
         tensor_tree::load_tensor(param_second_moment, opt_data_ifs);
     } else {
-        opt_data = make_tensor_tree(layer);
+        opt_data = lstm_seg::make_tensor_tree(layer, args);
         tensor_tree::load_tensor(opt_data, opt_data_ifs);
     }
     opt_data_ifs.close();
@@ -308,17 +300,9 @@ void learning_env::learn_sample(
         nn = lstm::make_stacked_bi_lstm_nn(var_tree->children.front(), inputs, lstm::lstm_builder{});
     }
 
-    std::shared_ptr<autodiff::op_t> hs = autodiff::col_cat(nn.layer.back().output);
-    std::shared_ptr<autodiff::op_t> att_weight = autodiff::mmul(tensor_tree::get_var(var_tree->children[1]), hs);
-    std::vector<std::shared_ptr<autodiff::op_t>> feats;
+    std::shared_ptr<autodiff::op_t> pred_var;
 
-    for (int i = 0; i < label_id.size(); ++i) {
-        std::shared_ptr<autodiff::op_t> norm_att_weight = autodiff::softmax(autodiff::row_at(att_weight, i));
-        feats.push_back(autodiff::mul(hs, norm_att_weight));
-    }
-
-    std::shared_ptr<autodiff::op_t> pred_var = autodiff::logsoftmax(
-        autodiff::mul(autodiff::row_cat(feats), tensor_tree::get_var(var_tree->children[2])));
+    pred_var = lstm_seg::make_pred_nn(graph, nn, var_tree, param, args);
 
     auto topo_order = autodiff::topo_order(pred_var);
     autodiff::eval(topo_order, autodiff::eval_funcs);
@@ -341,7 +325,7 @@ void learning_env::learn_sample(
 
     autodiff::grad(topo_order, autodiff::grad_funcs);
 
-    std::shared_ptr<tensor_tree::vertex> grad = make_tensor_tree(layer);
+    std::shared_ptr<tensor_tree::vertex> grad = lstm_seg::make_tensor_tree(layer, args);
     tensor_tree::resize_as(grad, param);
     tensor_tree::copy_grad(grad, var_tree);
 
@@ -354,7 +338,7 @@ void learning_env::learn_sample(
         }
     }
 
-    double v1 = tensor_tree::get_matrix(param->children.front()->children[0]->children[0]->children[0])(0, 0);
+    double v1 = tensor_tree::get_matrix(param->children[0]->children[0]->children[0]->children[0])(0, 0);
 
     if (ebt::in(std::string("decay"), args)) {
         tensor_tree::rmsprop_update(param, grad, opt_data, decay, step_size);
@@ -365,7 +349,7 @@ void learning_env::learn_sample(
         tensor_tree::adagrad_update(param, grad, opt_data, step_size);
     }
 
-    double v2 = tensor_tree::get_matrix(param->children.front()->children[0]->children[0]->children[0])(0, 0);
+    double v2 = tensor_tree::get_matrix(param->children[0]->children[0]->children[0]->children[0])(0, 0);
 
     std::cout << "weight: " << v1 << " update: " << v2 - v1 << " rate: " << (v2 - v1) / v1 << std::endl;
 

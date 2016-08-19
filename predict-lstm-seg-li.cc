@@ -10,6 +10,7 @@
 #include "nn/nn.h"
 #include <random>
 #include "nn/tensor_tree.h"
+#include "nn/lstm-seg.h"
 
 struct prediction_env {
 
@@ -40,20 +41,17 @@ struct prediction_env {
 
 };
 
-std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer);
-
 int main(int argc, char *argv[])
 {
     ebt::ArgumentSpec spec {
-        "predict-lstm-seg",
-        "Predict segments with an LSTM ",
+        "predict-lstm-seg-li",
+        "Predict segments with an LSTM",
         {
             {"frame-batch", "", true},
             {"gt-batch", "", true},
             {"param", "", true},
             {"label", "", true},
             {"dropout", "", false},
-            {"print-attention", "", false},
         }
     };
 
@@ -76,15 +74,6 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer)
-{
-    tensor_tree::vertex v { tensor_tree::tensor_t::nil };
-    v.children.push_back(lstm::make_stacked_bi_lstm_tensor_tree(layer));
-    v.children.push_back(tensor_tree::make_matrix());
-    v.children.push_back(tensor_tree::make_vector());
-    return std::make_shared<tensor_tree::vertex>(v);
-}
-
 prediction_env::prediction_env(std::unordered_map<std::string, std::string> args)
     : args(args)
 {
@@ -96,7 +85,7 @@ prediction_env::prediction_env(std::unordered_map<std::string, std::string> args
     std::ifstream param_ifs { args.at("param") };
     std::getline(param_ifs, line);
     layer = std::stoi(line);
-    param = make_tensor_tree(layer);
+    param = lstm_seg::make_tensor_tree(layer, args);
     tensor_tree::load_tensor(param, param_ifs);
     param_ifs.close();
 
@@ -172,19 +161,9 @@ void prediction_env::predict_sample(
         nn = lstm::make_stacked_bi_lstm_nn(var_tree->children.front(), inputs, lstm::lstm_builder{});
     }
 
-    std::shared_ptr<autodiff::op_t> hs = autodiff::col_cat(nn.layer.back().output);
-    std::shared_ptr<autodiff::op_t> pre_att = autodiff::mmul(tensor_tree::get_var(var_tree->children[1]), hs);
-    std::vector<std::shared_ptr<autodiff::op_t>> feats;
-    std::vector<std::shared_ptr<autodiff::op_t>> atts;
+    std::shared_ptr<autodiff::op_t> pred_var;
 
-    for (int i = 0; i < label_id.size(); ++i) {
-        std::shared_ptr<autodiff::op_t> att = autodiff::softmax(autodiff::row_at(pre_att, i));
-        atts.push_back(att);
-        feats.push_back(autodiff::mul(hs, att));
-    }
-
-    std::shared_ptr<autodiff::op_t> pred_var = autodiff::logsoftmax(
-        autodiff::mul(autodiff::row_cat(feats), tensor_tree::get_var(var_tree->children[2])));
+    pred_var = lstm_seg::make_pred_nn(graph, nn, var_tree, param, args);
 
     auto topo_order = autodiff::topo_order(pred_var);
     autodiff::eval(topo_order, autodiff::eval_funcs);
@@ -209,18 +188,5 @@ void prediction_env::predict_sample(
         }
     }
 
-    if (ebt::in(std::string("print-attention"), args)) {
-        la::vector<double>& u = autodiff::get_output<la::vector<double>>(atts[argmax]);
-        std::cout << id_label[argmax] << " ";
-        std::cout << std::vector<double> { u.data(), u.data() + u.size() } << std::endl;
-
-        la::vector<double>& v = autodiff::get_output<la::vector<double>>(atts[argmin]);
-        std::cout << id_label[argmin] << " ";
-        std::cout << std::vector<double> { v.data(), v.data() + v.size() } << std::endl;
-
-        std::cout << std::endl;
-    } else {
-        std::cout << id_label[argmax] << std::endl;
-    }
+    std::cout << id_label[argmax] << std::endl;
 }
-
