@@ -52,6 +52,8 @@ int main(int argc, char *argv[])
             {"param", "", true},
             {"label", "", true},
             {"dropout", "", false},
+            {"uniform-att", "", false},
+            {"endpoints", "", false},
         }
     };
 
