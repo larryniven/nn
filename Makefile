@@ -17,7 +17,9 @@ bin = \
     predict-lstm-seg \
     learn-lstm-seg-li \
     predict-lstm-seg-li \
-    avg-lstm-seg-li \
+    lstm-seg-li-avg \
+    lstm-seg-li-grad \
+    lstm-seg-li-update \
     libnn.a
 
 all: $(bin)
@@ -71,7 +73,13 @@ learn-lstm-seg-li: learn-lstm-seg-li.o lstm-seg.o tensor_tree.o lstm.o pred.o nn
 predict-lstm-seg-li: predict-lstm-seg-li.o lstm-seg.o tensor_tree.o lstm.o pred.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
-avg-lstm-seg-li: avg-lstm-seg-li.o lstm-seg.o tensor_tree.o lstm.o pred.o nn.o
+lstm-seg-li-avg: lstm-seg-li-avg.o lstm-seg.o tensor_tree.o lstm.o pred.o nn.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+lstm-seg-li-grad: lstm-seg-li-grad.o lstm-seg.o tensor_tree.o lstm.o pred.o nn.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+lstm-seg-li-update: lstm-seg-li-update.o lstm-seg.o tensor_tree.o lstm.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 nn.o: nn.h
