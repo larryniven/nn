@@ -84,6 +84,5 @@ void learning_env::run()
     ofs << layer << std::endl;
     tensor_tree::save_tensor(param_avg, ofs);
     ofs.close();
-
 }
 
