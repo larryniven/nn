@@ -23,7 +23,6 @@ int main(int argc, char *argv[])
         {
             {"params", "", true},
             {"output", "", true},
-            {"nsegs", "", true},
         }
     };
 
@@ -49,7 +48,7 @@ int main(int argc, char *argv[])
 learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     : args(args)
 {
-    nsegs = std::stoi(args.at("nsegs"));
+    nsegs = 0;
 }
 
 void learning_env::run()
@@ -60,31 +59,39 @@ void learning_env::run()
 
     std::vector<std::string> param_files = ebt::split(args.at("params"), ",");
 
+    std::vector<std::shared_ptr<tensor_tree::vertex>> params;
+    std::vector<int> segs;
+
     for (int i = 0; i < param_files.size(); ++i) {
         std::string line;
 
         std::ifstream ifs { param_files[i] };
         std::getline(ifs, line);
+        layer = std::stoi(line);
 
-        if (i == 0) {
-            layer = std::stoi(line);
-            param_avg = lstm_seg::make_tensor_tree(layer, args);
-            tensor_tree::load_tensor(param_avg, ifs);
-        } else {
-            std::shared_ptr<tensor_tree::vertex> param = lstm_seg::make_tensor_tree(layer, args);
-            tensor_tree::load_tensor(param, ifs);
-            std::getline(ifs, line);
-            int segs = std::stoi(line);
-            tensor_tree::imul(param, segs / double(nsegs));
-            tensor_tree::iadd(param_avg, param);
-        }
+        std::shared_ptr<tensor_tree::vertex> param = lstm_seg::make_tensor_tree(layer, args);
+        tensor_tree::load_tensor(param, ifs);
+        params.push_back(param);
+        std::getline(ifs, line);
+        int n = std::stoi(line);
+        segs.push_back(n);
+        nsegs += n;
 
         ifs.close();
+    }
+
+    param_avg = lstm_seg::make_tensor_tree(layer, args);
+    tensor_tree::resize_as(param_avg, params.front());
+
+    for (int i = 0; i < params.size(); ++i) {
+        tensor_tree::imul(params[i], segs[i] / double(nsegs));
+        tensor_tree::iadd(params[i], param_avg);
     }
 
     std::ofstream ofs { args.at("output") };
     ofs << layer << std::endl;
     tensor_tree::save_tensor(param_avg, ofs);
+    ofs << nsegs << std::endl;
     ofs.close();
 }
 
