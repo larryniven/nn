@@ -85,7 +85,7 @@ void learning_env::run()
 
     for (int i = 0; i < params.size(); ++i) {
         tensor_tree::imul(params[i], segs[i] / double(nsegs));
-        tensor_tree::iadd(params[i], param_avg);
+        tensor_tree::iadd(param_avg, params[i]);
     }
 
     std::ofstream ofs { args.at("output") };
