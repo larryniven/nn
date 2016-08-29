@@ -20,6 +20,8 @@ bin = \
     lstm-seg-li-avg \
     lstm-seg-li-grad \
     lstm-seg-li-update \
+    lstm-seg-logp-learn \
+    lstm-seg-logp-predict \
     libnn.a
 
 all: $(bin)
@@ -80,6 +82,12 @@ lstm-seg-li-grad: lstm-seg-li-grad.o lstm-seg.o tensor_tree.o lstm.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 lstm-seg-li-update: lstm-seg-li-update.o lstm-seg.o tensor_tree.o lstm.o pred.o nn.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+lstm-seg-logp-learn: lstm-seg-logp-learn.o lstm-seg.o tensor_tree.o lstm.o pred.o nn.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
+
+lstm-seg-logp-predict: lstm-seg-logp-predict.o lstm-seg.o tensor_tree.o lstm.o pred.o nn.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lautodiff -lspeech -lopt -lla -lebt -lblas
 
 nn.o: nn.h

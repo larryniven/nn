@@ -66,7 +66,7 @@ struct learning_env {
 int main(int argc, char *argv[])
 {
     ebt::ArgumentSpec spec {
-        "learn-lstm-seg-label-indep-att",
+        "lstm-seg-li-learn",
         "Train a LSTM frame classifier",
         {
             {"frame-batch", "", true},

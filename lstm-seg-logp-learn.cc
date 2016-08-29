@@ -4,6 +4,7 @@
 #include "speech/speech.h"
 #include <fstream>
 #include <vector>
+#include "opt/opt.h"
 #include "nn/lstm.h"
 #include "nn/pred.h"
 #include "nn/nn.h"
@@ -17,8 +18,9 @@ struct learning_env {
     std::ifstream gt_batch;
 
     std::shared_ptr<tensor_tree::vertex> param;
-
-    std::shared_ptr<tensor_tree::vertex> grad_avg;
+    std::shared_ptr<tensor_tree::vertex> opt_data;
+    std::shared_ptr<tensor_tree::vertex> param_first_moment;
+    std::shared_ptr<tensor_tree::vertex> param_second_moment;
 
     std::shared_ptr<tensor_tree::vertex> var_tree;
 
@@ -26,16 +28,24 @@ struct learning_env {
 
     lstm::stacked_bi_lstm_nn_t nn;
 
+    double step_size;
+    double decay;
+
     double dropout;
     int dropout_seed;
 
     std::default_random_engine gen;
 
-    std::string output;
+    int save_every;
+
+    std::string output_param;
+    std::string output_opt_data;
 
     double clip;
 
-    int nsegs;
+    int time;
+    double adam_beta1;
+    double adam_beta2;
 
     std::unordered_map<std::string, int> label_id;
 
@@ -56,20 +66,25 @@ struct learning_env {
 int main(int argc, char *argv[])
 {
     ebt::ArgumentSpec spec {
-        "grad-lstm-seg-li",
-        "Compute gradient of a LSTM frame classifier",
+        "lstm-seg-logp-learn",
+        "Train a LSTM frame classifier",
         {
             {"frame-batch", "", true},
             {"gt-batch", "", true},
             {"param", "", true},
-            {"output", "", false},
+            {"opt-data", "", true},
+            {"step-size", "", true},
+            {"decay", "", false},
+            {"save-every", "", false},
+            {"output-param", "", false},
+            {"output-opt-data", "", false},
             {"clip", "", false},
             {"label", "", true},
             {"ignored", "", false},
             {"dropout", "", false},
             {"dropout-seed", "", false},
-            {"uniform-att", "", false},
-            {"endpoints", "", false},
+            {"adam-beta1", "", false},
+            {"adam-beta2", "", false},
         }
     };
 
@@ -103,9 +118,47 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
     std::ifstream param_ifs { args.at("param") };
     std::getline(param_ifs, line);
     layer = std::stoi(line);
-    param = lstm_seg::make_tensor_tree(layer, args);
+    param = lstm_seg::logp::make_tensor_tree(layer);
     tensor_tree::load_tensor(param, param_ifs);
     param_ifs.close();
+
+    std::ifstream opt_data_ifs { args.at("opt-data") };
+    std::getline(opt_data_ifs, line);
+
+    if (ebt::in(std::string("adam-beta1"), args)) {
+        time = std::stoi(line);
+        std::getline(opt_data_ifs, line);
+        param_first_moment = lstm_seg::logp::make_tensor_tree(layer);
+        tensor_tree::load_tensor(param_first_moment, opt_data_ifs);
+        param_second_moment = lstm_seg::logp::make_tensor_tree(layer);
+        tensor_tree::load_tensor(param_second_moment, opt_data_ifs);
+    } else {
+        opt_data = lstm_seg::logp::make_tensor_tree(layer);
+        tensor_tree::load_tensor(opt_data, opt_data_ifs);
+    }
+    opt_data_ifs.close();
+
+    if (ebt::in(std::string("save-every"), args)) {
+        save_every = std::stoi(args.at("save-every"));
+    } else {
+        save_every = std::numeric_limits<int>::max();
+    }
+
+    step_size = std::stod(args.at("step-size"));
+
+    if (ebt::in(std::string("decay"), args)) {
+        decay = std::stod(args.at("decay"));
+    }
+
+    output_param = "param-last";
+    if (ebt::in(std::string("output-param"), args)) {
+        output_param = args.at("output-param");
+    }
+
+    output_opt_data = "opt-data-last";
+    if (ebt::in(std::string("output-opt-data"), args)) {
+        output_opt_data = args.at("output-opt-data");
+    }
 
     clip = std::numeric_limits<double>::infinity();
     if (ebt::in(std::string("clip"), args)) {
@@ -131,15 +184,18 @@ learning_env::learning_env(std::unordered_map<std::string, std::string> args)
         gen.seed(dropout_seed);
     }
 
-    grad_avg = lstm_seg::make_tensor_tree(layer, args);
-    tensor_tree::resize_as(grad_avg, param);
+    if (ebt::in(std::string("adam-beta1"), args)) {
+        adam_beta1 = std::stod(args.at("adam-beta1"));
+    }
 
-    nsegs = 0;
+    if (ebt::in(std::string("adam-beta2"), args)) {
+        adam_beta2 = std::stod(args.at("adam-beta2"));
+    }
 }
 
 void learning_env::run()
 {
-    int sample = 0;
+    int i = 1;
 
     while (1) {
         std::vector<std::vector<double>> frames = speech::load_frame_batch(frame_batch);
@@ -150,7 +206,7 @@ void learning_env::run()
             break;
         }
 
-        std::cout << "utterance: " << sample + 1 << std::endl;
+        std::cout << "utterance: " << i << std::endl;
 
         for (int i = 0; i < segs.size(); ++i) {
             if (ebt::in(segs[i].label, ignored)) {
@@ -171,14 +227,55 @@ void learning_env::run()
             learn_sample(seg_frames, segs[i].label);
         }
 
-        ++sample;
+        if (i % save_every == 0) {
+            std::ofstream param_ofs { "param-last" };
+            param_ofs << layer << std::endl;
+            tensor_tree::save_tensor(param, param_ofs);
+            param_ofs.close();
+
+            if (ebt::in(std::string("adam-beta1"), args)) {
+                std::ofstream opt_data_ofs { "opt-data-last" };
+                opt_data_ofs << time << std::endl;
+                opt_data_ofs << layer << std::endl;
+                tensor_tree::save_tensor(param_first_moment, opt_data_ofs);
+                tensor_tree::save_tensor(param_second_moment, opt_data_ofs);
+                opt_data_ofs.close();
+            } else {
+                std::ofstream opt_data_ofs { "opt-data-last" };
+                opt_data_ofs << layer << std::endl;
+                tensor_tree::save_tensor(opt_data, opt_data_ofs);
+                opt_data_ofs.close();
+            }
+        }
+
+#if DEBUG_TOP
+        if (i == DEBUG_TOP) {
+            break;
+        }
+#endif
+
+        ++i;
+        ++time;
     }
 
-    std::ofstream ofs { args.at("output") };
-    ofs << layer << std::endl;
-    tensor_tree::save_tensor(grad_avg, ofs);
-    ofs << nsegs << std::endl;
-    ofs.close();
+    std::ofstream param_ofs { output_param };
+    param_ofs << layer << std::endl;
+    tensor_tree::save_tensor(param, param_ofs);
+    param_ofs.close();
+
+    if (ebt::in(std::string("adam-beta1"), args)) {
+        std::ofstream opt_data_ofs { output_opt_data };
+        opt_data_ofs << time << std::endl;
+        opt_data_ofs << layer << std::endl;
+        tensor_tree::save_tensor(param_first_moment, opt_data_ofs);
+        tensor_tree::save_tensor(param_second_moment, opt_data_ofs);
+        opt_data_ofs.close();
+    } else {
+        std::ofstream opt_data_ofs { output_opt_data };
+        opt_data_ofs << layer << std::endl;
+        tensor_tree::save_tensor(opt_data, opt_data_ofs);
+        opt_data_ofs.close();
+    }
 }
 
 void learning_env::learn_sample(
@@ -203,7 +300,8 @@ void learning_env::learn_sample(
 
     std::shared_ptr<autodiff::op_t> pred_var;
 
-    pred_var = lstm_seg::make_pred_nn(graph, nn, var_tree, param, args);
+    la::vector<double>& v = tensor_tree::get_vector(param->children[2]);
+    pred_var = lstm_seg::logp::make_pred_nn(graph, nn, var_tree, v.size());
 
     auto topo_order = autodiff::topo_order(pred_var);
     autodiff::eval(topo_order, autodiff::eval_funcs);
@@ -226,7 +324,7 @@ void learning_env::learn_sample(
 
     autodiff::grad(topo_order, autodiff::grad_funcs);
 
-    std::shared_ptr<tensor_tree::vertex> grad = lstm_seg::make_tensor_tree(layer, args);
+    std::shared_ptr<tensor_tree::vertex> grad = lstm_seg::logp::make_tensor_tree(layer);
     tensor_tree::resize_as(grad, param);
     tensor_tree::copy_grad(grad, var_tree);
 
@@ -239,10 +337,20 @@ void learning_env::learn_sample(
         }
     }
 
-    tensor_tree::imul(grad_avg, nsegs / double(nsegs + 1));
-    tensor_tree::imul(grad, 1.0 / (nsegs + 1));
-    tensor_tree::iadd(grad_avg, grad);
+    double v1 = tensor_tree::get_matrix(param->children[0]->children[0]->children[0]->children[0])(0, 0);
 
-    ++nsegs;
+    if (ebt::in(std::string("decay"), args)) {
+        tensor_tree::rmsprop_update(param, grad, opt_data, decay, step_size);
+    } if (ebt::in(std::string("adam-beta1"), args)) {
+        tensor_tree::adam_update(param, grad, param_first_moment, param_second_moment,
+            time, step_size, adam_beta1, adam_beta2);
+    } else {
+        tensor_tree::adagrad_update(param, grad, opt_data, step_size);
+    }
+
+    double v2 = tensor_tree::get_matrix(param->children[0]->children[0]->children[0]->children[0])(0, 0);
+
+    std::cout << "weight: " << v1 << " update: " << v2 - v1 << " rate: " << (v2 - v1) / v1 << std::endl;
+
 }
 

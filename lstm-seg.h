@@ -42,6 +42,18 @@ namespace lstm_seg {
 
     }
 
+    namespace logp {
+
+        std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer);
+
+        std::shared_ptr<autodiff::op_t> make_pred_nn(
+            autodiff::computation_graph& graph,
+            lstm::stacked_bi_lstm_nn_t& nn,
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            int h_dim);
+
+    }
+
 }
 
 #endif

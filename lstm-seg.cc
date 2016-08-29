@@ -101,4 +101,37 @@ namespace lstm_seg {
 
     }
 
+    namespace logp {
+
+        std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer)
+        {
+            tensor_tree::vertex v { tensor_tree::tensor_t::nil };
+            v.children.push_back(lstm::make_stacked_bi_lstm_tensor_tree(layer));
+            v.children.push_back(tensor_tree::make_matrix());
+            v.children.push_back(tensor_tree::make_vector());
+            return std::make_shared<tensor_tree::vertex>(v);
+        }
+
+        std::shared_ptr<autodiff::op_t> make_pred_nn(
+            autodiff::computation_graph& graph,
+            lstm::stacked_bi_lstm_nn_t& nn,
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            int label_dim)
+        {
+            std::vector<std::shared_ptr<autodiff::op_t>> logp;
+
+            for (int i = 0; i < nn.layer.back().output.size(); ++i) {
+                logp.push_back(autodiff::logsoftmax(autodiff::add(
+                    autodiff::mul(tensor_tree::get_var(var_tree->children[1]), nn.layer.back().output[i]),
+                    tensor_tree::get_var(var_tree->children[2]))));
+            }
+
+            la::vector<double> v;
+            v.resize(label_dim, 1.0 / nn.layer.back().output.size());
+
+            return autodiff::emul(autodiff::add(logp), graph.var(v));
+        }
+
+    }
+
 }
