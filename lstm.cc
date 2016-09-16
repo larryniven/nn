@@ -42,12 +42,15 @@ namespace lstm {
     {
         lstm_step_nn_t result;
 
+        result.input = nullptr;
+
         std::vector<std::shared_ptr<autodiff::op_t>> h_comp { get_var(var_tree->children[2]) };
         std::vector<std::shared_ptr<autodiff::op_t>> input_gate_comp { get_var(var_tree->children[6]) };
         std::vector<std::shared_ptr<autodiff::op_t>> forget_gate_comp { get_var(var_tree->children[14]) };
 
         if (input != nullptr) {
-            h_comp.push_back(autodiff::mul(get_var(var_tree->children[0]), input));
+            result.input = autodiff::mul(get_var(var_tree->children[0]), input);
+            h_comp.push_back(result.input);
             input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[3]), input));
             forget_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[11]), input));
         }

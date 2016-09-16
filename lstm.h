@@ -18,6 +18,7 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> forget_gate;
         std::shared_ptr<autodiff::op_t> output;
         std::shared_ptr<autodiff::op_t> cell;
+        std::shared_ptr<autodiff::op_t> input;
     };
 
     lstm_step_nn_t make_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
@@ -143,7 +144,6 @@ namespace lstm {
     struct db_lstm2d_nn_t {
         std::vector<bi_lstm2d_nn_t> layer;
     };
-
 #endif
 
 }
