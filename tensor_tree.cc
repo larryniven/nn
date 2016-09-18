@@ -211,6 +211,25 @@ namespace tensor_tree {
         return result;
     }
 
+    bool has_nan(std::shared_ptr<vertex> root)
+    {
+        auto order = leaves_pre_order(root);
+
+        for (int i = 0; i < order.size(); ++i) {
+            if (order[i]->type == tensor_t::vector) {
+                if (la::has_nan(get_vector(order[i]))) {
+                    return true;
+                }
+            } else if (order[i]->type == tensor_t::matrix) {
+                if (la::has_nan(get_matrix(order[i]))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     void const_step_update_momentum(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
         std::shared_ptr<vertex> opt_data, double momentum, double step_size)
     {

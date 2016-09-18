@@ -55,6 +55,8 @@ namespace tensor_tree {
 
     double norm(std::shared_ptr<vertex> root);
 
+    bool has_nan(std::shared_ptr<vertex> root);
+
     void const_step_update_momentum(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
         std::shared_ptr<vertex> opt_data, double momentum, double step_size);
 
