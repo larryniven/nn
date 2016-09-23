@@ -77,9 +77,85 @@ namespace tensor_tree {
 
     std::shared_ptr<vertex> copy_tree(std::shared_ptr<vertex> root);
 
+    std::shared_ptr<vertex> shallow_copy(std::shared_ptr<vertex> root);
+    std::shared_ptr<vertex> deep_copy(std::shared_ptr<vertex> root);
+
     void copy_grad(std::shared_ptr<vertex> result, std::shared_ptr<vertex> var_tree);
 
     void print_tree(std::shared_ptr<vertex> root);
+
+    struct optimizer {
+
+        virtual ~optimizer();
+
+        virtual void update(std::shared_ptr<vertex> grad) = 0;
+
+        virtual void save_opt_data(std::ostream& os) const = 0;
+
+        virtual void load_opt_data(std::istream& is) = 0;
+
+    };
+
+    struct adagrad_opt
+        : public optimizer {
+
+        std::shared_ptr<vertex> param;
+        double step_size;
+        std::shared_ptr<vertex> accu_grad_sq;
+
+        adagrad_opt(std::shared_ptr<vertex> param,
+            double step_size);
+
+        virtual void update(std::shared_ptr<vertex> grad) override;
+
+        virtual void save_opt_data(std::ostream& os) const override;
+
+        virtual void load_opt_data(std::istream& is) override;
+
+    };
+
+    struct rmsprop_opt
+        : public optimizer {
+
+        std::shared_ptr<vertex> param;
+        double decay;
+        double step_size;
+        std::shared_ptr<vertex> accu_grad_sq;
+
+        rmsprop_opt(std::shared_ptr<vertex> param,
+            double decay, double step_size);
+
+        virtual void update(std::shared_ptr<vertex> grad) override;
+
+        virtual void save_opt_data(std::ostream& os) const override;
+
+        virtual void load_opt_data(std::istream& is) override;
+
+    };
+
+    struct adam_opt
+        : public optimizer {
+
+        std::shared_ptr<vertex> param;
+        double alpha;
+        double beta1;
+        double beta2;
+
+        int time;
+        std::shared_ptr<vertex> first_moment;
+        std::shared_ptr<vertex> second_moment;
+
+        adam_opt(std::shared_ptr<vertex> param,
+            double alpha, double beta1, double beta2);
+
+        virtual void update(std::shared_ptr<vertex> grad) override;
+
+        virtual void save_opt_data(std::ostream& os) const override;
+
+        virtual void load_opt_data(std::istream& is) override;
+
+    };
+
 }
 
 #endif

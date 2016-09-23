@@ -3,6 +3,7 @@
 #include "la/la.h"
 #include "opt/opt.h"
 #include <fstream>
+#include <exception>
 
 namespace tensor_tree {
 
@@ -21,8 +22,7 @@ namespace tensor_tree {
         if (p->type == tensor_t::vector) {
             return get_data<la::vector<double>>(p);
         } else {
-            std::cerr << "expecting tensor_t::vector" << std::endl;
-            exit(1);
+            throw std::logic_error("expecting tensor_t::vector");
         }
     }
 
@@ -31,8 +31,7 @@ namespace tensor_tree {
         if (p->type == tensor_t::matrix) {
             return get_data<la::matrix<double>>(p);
         } else {
-            std::cerr << "expecting tensor_t::matrix" << std::endl;
-            exit(1);
+            throw std::logic_error("expecting tensor_t::matrix");
         }
     }
 
@@ -41,8 +40,7 @@ namespace tensor_tree {
         if (p->type == tensor_t::autodiff_var) {
             return std::static_pointer_cast<autodiff::op_t>(p->data);
         } else {
-            std::cerr << "expecting tensor_t::autodiff_var" << std::endl;
-            exit(1);
+            throw std::logic_error("expecting autodiff_var");
         }
     }
 
@@ -390,6 +388,51 @@ namespace tensor_tree {
 
     std::shared_ptr<vertex> copy_tree(std::shared_ptr<vertex> root)
     {
+        return deep_copy(root);
+    }
+
+    std::shared_ptr<vertex> shallow_copy(std::shared_ptr<vertex> root)
+    {
+        std::unordered_map<std::shared_ptr<vertex>, std::shared_ptr<vertex>> vertex_map;
+
+        std::vector<std::tuple<std::shared_ptr<vertex>, bool>> stack;
+
+        stack.push_back(std::make_tuple(root, false));
+
+        while (stack.size() > 0) {
+            std::shared_ptr<vertex> u;
+            bool finished;
+            std::tie(u, finished) = stack.back();
+            stack.pop_back();
+
+            if (!finished) {
+                stack.push_back(std::make_tuple(u, true));
+
+                for (int i = u->children.size() - 1; i >= 0; --i) {
+                    stack.push_back(std::make_tuple(u->children[i], false));
+                }
+            } else {
+                std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {tensor_t::nil});
+
+                if (u->type == tensor_t::vector) {
+                    k->type = u->type;
+                } else if (u->type == tensor_t::matrix) {
+                    k->type = u->type;
+                }
+
+                vertex_map[u] = k;
+
+                for (int i = 0; i < u->children.size(); ++i) {
+                    k->children.push_back(vertex_map.at(u->children[i]));
+                }
+            }
+        }
+
+        return vertex_map.at(root);
+    }
+
+    std::shared_ptr<vertex> deep_copy(std::shared_ptr<vertex> root)
+    {
         std::unordered_map<std::shared_ptr<vertex>, std::shared_ptr<vertex>> vertex_map;
 
         std::vector<std::tuple<std::shared_ptr<vertex>, bool>> stack;
@@ -501,6 +544,84 @@ namespace tensor_tree {
                 path.pop_back();
             }
         }
+    }
+
+    optimizer::~optimizer()
+    {}
+
+    adagrad_opt::adagrad_opt(std::shared_ptr<vertex> param,
+        double step_size)
+        : param(param), step_size(step_size)
+    {
+        accu_grad_sq = shallow_copy(param);
+    }
+
+    void adagrad_opt::update(std::shared_ptr<vertex> grad)
+    {
+        adagrad_update(param, grad, accu_grad_sq, step_size);
+    }
+
+    void adagrad_opt::save_opt_data(std::ostream& os) const
+    {
+        save_tensor(accu_grad_sq, os);
+    }
+
+    void adagrad_opt::load_opt_data(std::istream& is)
+    {
+        load_tensor(accu_grad_sq, is);
+    }
+
+    rmsprop_opt::rmsprop_opt(std::shared_ptr<vertex> param,
+        double decay, double step_size)
+        : param(param), decay(decay), step_size(step_size)
+    {
+        accu_grad_sq = shallow_copy(param);
+    }
+
+    void rmsprop_opt::update(std::shared_ptr<vertex> grad)
+    {
+        rmsprop_update(param, grad, accu_grad_sq, decay, step_size);
+    }
+
+    void rmsprop_opt::save_opt_data(std::ostream& os) const
+    {
+        save_tensor(accu_grad_sq, os);
+    }
+
+    void rmsprop_opt::load_opt_data(std::istream& is)
+    {
+        load_tensor(accu_grad_sq, is);
+    }
+
+    adam_opt::adam_opt(std::shared_ptr<vertex> param,
+        double alpha, double beta1, double beta2)
+        : param(param)
+        , alpha(alpha), beta1(beta1), beta2(beta2)
+    {
+        first_moment = shallow_copy(param);
+        second_moment = shallow_copy(param);
+    }
+
+    void adam_opt::update(std::shared_ptr<vertex> grad)
+    {
+        adam_update(param, grad, first_moment, second_moment,
+            time, alpha, beta1, beta2);
+    }
+
+    void adam_opt::save_opt_data(std::ostream& os) const
+    {
+        os << time << std::endl;
+        save_tensor(first_moment, os);
+        save_tensor(second_moment, os);
+    }
+
+    void adam_opt::load_opt_data(std::istream& is)
+    {
+        std::string line;
+        std::getline(is, line);
+        time = std::stoi(line);
+        load_tensor(first_moment, is);
+        load_tensor(second_moment, is);
     }
 
 }
