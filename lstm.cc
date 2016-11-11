@@ -182,7 +182,7 @@ namespace lstm {
 
         autodiff::computation_graph& g = *tensor_tree::get_var(var_tree->children[0]->children[0])->graph;
 
-        std::bernoulli_distribution bernoulli(prob);
+        std::bernoulli_distribution bernoulli(1.0 - prob);
 
         auto& m = autodiff::get_output<la::matrix<double>>(
             get_var(var_tree->children[0]->children[0]));
