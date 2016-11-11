@@ -53,6 +53,54 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
         lstm_builder const& builder);
 
+    struct bi_lstm_builder {
+
+        virtual ~bi_lstm_builder();
+
+        virtual bi_lstm_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const;
+    };
+
+    struct bi_lstm_input_dropout
+        : public bi_lstm_builder {
+
+        std::default_random_engine& gen;
+        double prob;
+        std::shared_ptr<bi_lstm_builder> builder;
+
+        bi_lstm_input_dropout(std::default_random_engine& gen, double prob,
+            std::shared_ptr<bi_lstm_builder> builder);
+
+        virtual bi_lstm_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const override;
+    };
+
+    struct bi_lstm_input_scaling
+        : public bi_lstm_builder {
+
+        double scale;
+        std::shared_ptr<bi_lstm_builder> builder;
+
+        bi_lstm_input_scaling(double scale,
+            std::shared_ptr<bi_lstm_builder> builder);
+
+        virtual bi_lstm_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const override;
+    };
+
+    struct bi_lstm_input_subsampling
+        : public bi_lstm_builder {
+
+        std::shared_ptr<bi_lstm_builder> builder;
+        mutable int freq;
+        mutable bool once;
+
+        bi_lstm_input_subsampling(std::shared_ptr<bi_lstm_builder> builder);
+
+        virtual bi_lstm_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const override;
+    };
+
     // stacked bidirectional lstm
 
     std::shared_ptr<tensor_tree::vertex> make_stacked_bi_lstm_tensor_tree(int layer);
@@ -64,35 +112,7 @@ namespace lstm {
     stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn(
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder);
-
-    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout(
-        autodiff::computation_graph& g,
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder,
-        std::default_random_engine& gen, double prob);
-
-    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout(
-        autodiff::computation_graph& g,
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder,
-        double prob);
-
-    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout_light(
-        autodiff::computation_graph& g,
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder,
-        std::default_random_engine& gen, double prob);
-
-    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout_light(
-        autodiff::computation_graph& g,
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder,
-        double prob);
+        bi_lstm_builder const& builder);
 
     std::vector<std::string> subsample(
         std::vector<std::string> const& input,

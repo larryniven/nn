@@ -159,6 +159,89 @@ namespace lstm {
         return result;
     }
 
+    bi_lstm_builder::~bi_lstm_builder()
+    {}
+
+    bi_lstm_nn_t bi_lstm_builder::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
+    {
+        return make_bi_lstm_nn(var_tree, feat, lstm_builder{});
+    }
+
+    bi_lstm_input_dropout::bi_lstm_input_dropout(
+        std::default_random_engine& gen,
+        double prob,
+        std::shared_ptr<bi_lstm_builder> builder)
+        : gen(gen), prob(prob), builder(builder)
+    {}
+
+    bi_lstm_nn_t bi_lstm_input_dropout::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
+    {
+        std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
+
+        autodiff::computation_graph& g = *tensor_tree::get_var(var_tree->children[0]->children[0])->graph;
+
+        std::bernoulli_distribution bernoulli(prob);
+
+        auto& m = autodiff::get_output<la::matrix<double>>(
+            get_var(var_tree->children[0]->children[0]));
+
+        for (int j = 0; j < feat.size(); ++j) {
+            la::vector<double> v;
+            v.resize(m.cols());
+            for (int d = 0; d < v.size(); ++d) {
+                v(d) = bernoulli(gen);
+            }
+            std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
+            masked_input.push_back(autodiff::emul(feat[j], input_mask));
+        }
+
+        return (*builder)(var_tree, masked_input);
+    }
+
+    bi_lstm_input_scaling::bi_lstm_input_scaling(double scale,
+        std::shared_ptr<bi_lstm_builder> builder)
+        : scale(scale), builder(builder)
+    {}
+
+    bi_lstm_nn_t bi_lstm_input_scaling::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
+    {
+        std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
+
+        autodiff::computation_graph& g = *tensor_tree::get_var(var_tree->children[0]->children[0])->graph;
+
+        auto& m = autodiff::get_output<la::matrix<double>>(
+            get_var(var_tree->children[0]->children[0]));
+
+        for (int j = 0; j < feat.size(); ++j) {
+            la::vector<double> v;
+            v.resize(m.cols(), scale);
+            std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
+            masked_input.push_back(autodiff::emul(feat[j], input_mask));
+        }
+
+        return (*builder)(var_tree, masked_input);
+    }
+
+    bi_lstm_input_subsampling::bi_lstm_input_subsampling(
+        std::shared_ptr<bi_lstm_builder> builder)
+        : builder(builder), freq(2), once(false)
+    {}
+
+    bi_lstm_nn_t bi_lstm_input_subsampling::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
+    {
+        if (once) {
+            std::vector<std::shared_ptr<autodiff::op_t>> subsampled_feat = subsample(feat, freq, 0);
+            return (*builder)(var_tree, subsampled_feat);
+        } else {
+            once = true;
+            return (*builder)(var_tree, feat);
+        }
+    }
+
     std::shared_ptr<tensor_tree::vertex> make_stacked_bi_lstm_tensor_tree(int layer)
     {
         tensor_tree::vertex root;
@@ -173,198 +256,14 @@ namespace lstm {
     stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn(
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder)
+        bi_lstm_builder const& builder)
     {
         stacked_bi_lstm_nn_t result;
 
         std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
 
         for (int i = 0; i < var_tree->children.size(); ++i) {
-            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f, builder));
-            f = &result.layer.back().output;
-        }
-
-        return result;
-    }
-
-    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout(
-        autodiff::computation_graph& g,
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder,
-        std::default_random_engine& gen, double prob)
-    {
-        stacked_bi_lstm_nn_t result;
-
-        std::bernoulli_distribution bernoulli { 1 - prob };
-
-        std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
-
-        for (int i = 0; i < var_tree->children.size(); ++i) {
-            std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
-
-            auto& m = autodiff::get_output<la::matrix<double>>(
-                get_var(var_tree->children[i]->children[0]->children[0]));
-
-            for (int j = 0; j < f->size(); ++j) {
-                la::vector<double> v;
-                v.resize(m.cols());
-                for (int d = 0; d < v.size(); ++d) {
-                    v(d) = bernoulli(gen);
-                }
-                std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
-                masked_input.push_back(autodiff::emul((*f)[j], input_mask));
-            }
-
-            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input, builder));
-
-            f = &result.layer.back().output;
-        }
-
-        auto& v = autodiff::get_output<la::vector<double>>(
-            get_var(var_tree->children.back()->children.back()));
-
-        for (int i = 0; i < result.layer.back().output.size(); ++i) {
-            la::vector<double> u;
-            u.resize(v.size());
-
-            for (int j = 0; j < v.size(); ++j) {
-                u(j) = bernoulli(gen);
-            }
-
-            std::shared_ptr<autodiff::op_t> output_mask = g.var(std::move(u));
-
-            result.layer.back().output[i] = autodiff::emul(result.layer.back().output[i], output_mask);
-        }
-
-        return result;
-    }
-
-    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout(
-        autodiff::computation_graph& g,
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder,
-        double prob)
-    {
-        stacked_bi_lstm_nn_t result;
-
-        std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
-
-        for (int i = 0; i < var_tree->children.size(); ++i) {
-            std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
-
-            auto& m = autodiff::get_output<la::matrix<double>>(
-                get_var(var_tree->children[i]->children[0]->children[0]));
-
-            for (int j = 0; j < f->size(); ++j) {
-                la::vector<double> v;
-                v.resize(m.cols());
-                for (int d = 0; d < v.size(); ++d) {
-                    v(d) = 1 - prob;
-                }
-                std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
-                masked_input.push_back(autodiff::emul((*f)[j], input_mask));
-            }
-
-            result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input, builder));
-
-            f = &result.layer.back().output;
-        }
-
-        auto& v = autodiff::get_output<la::vector<double>>(
-            get_var(var_tree->children.back()->children.back()));
-
-        for (int i = 0; i < result.layer.back().output.size(); ++i) {
-            la::vector<double> u;
-            u.resize(v.size());
-
-            for (int j = 0; j < v.size(); ++j) {
-                u(j) = 1 - prob;
-            }
-
-            std::shared_ptr<autodiff::op_t> output_mask = g.var(std::move(u));
-
-            result.layer.back().output[i] = autodiff::emul(result.layer.back().output[i], output_mask);
-        }
-
-        return result;
-    }
-
-    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout_light(
-        autodiff::computation_graph& g,
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder,
-        std::default_random_engine& gen, double prob)
-    {
-        stacked_bi_lstm_nn_t result;
-
-        std::bernoulli_distribution bernoulli { 1 - prob };
-
-        std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
-
-        for (int i = 0; i < var_tree->children.size(); ++i) {
-            if (i != 0) {
-                std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
-
-                auto& m = autodiff::get_output<la::matrix<double>>(
-                    get_var(var_tree->children[i]->children[0]->children[0]));
-
-                for (int j = 0; j < f->size(); ++j) {
-                    la::vector<double> v;
-                    v.resize(m.cols());
-                    for (int d = 0; d < v.size(); ++d) {
-                        v(d) = bernoulli(gen);
-                    }
-                    std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
-                    masked_input.push_back(autodiff::emul((*f)[j], input_mask));
-                }
-
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input, builder));
-            } else {
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f, builder));
-            }
-
-            f = &result.layer.back().output;
-        }
-
-        return result;
-    }
-
-    stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn_with_dropout_light(
-        autodiff::computation_graph& g,
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        lstm_builder const& builder,
-        double prob)
-    {
-        stacked_bi_lstm_nn_t result;
-
-        std::vector<std::shared_ptr<autodiff::op_t>> const* f = &feat;
-
-        for (int i = 0; i < var_tree->children.size(); ++i) {
-            if (i != 0) {
-                std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
-
-                auto& m = autodiff::get_output<la::matrix<double>>(
-                    get_var(var_tree->children[i]->children[0]->children[0]));
-
-                for (int j = 0; j < f->size(); ++j) {
-                    la::vector<double> v;
-                    v.resize(m.cols());
-                    for (int d = 0; d < v.size(); ++d) {
-                        v(d) = 1 - prob;
-                    }
-                    std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
-                    masked_input.push_back(autodiff::emul((*f)[j], input_mask));
-                }
-
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], masked_input, builder));
-            } else {
-                result.layer.push_back(make_bi_lstm_nn(var_tree->children[i], *f, builder));
-            }
-
+            result.layer.push_back(builder(var_tree->children[i], *f));
             f = &result.layer.back().output;
         }
 
@@ -375,6 +274,10 @@ namespace lstm {
         std::vector<std::string> const& input,
         int freq, int shift)
     {
+        if (freq == 1 && shift == 0) {
+            return input;
+        }
+
         std::vector<std::string> result;
 
         for (int i = 0; i < input.size(); ++i) {

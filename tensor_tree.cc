@@ -228,6 +228,29 @@ namespace tensor_tree {
         return false;
     }
 
+    void const_step_update(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
+        double step_size)
+    {
+        auto param_order = leaves_pre_order(param);
+        auto grad_order = leaves_pre_order(grad);
+
+        assert(param_order.size() == grad_order.size());
+
+        for (int i = 0; i < param_order.size(); ++i) {
+            if (grad_order[i]->type == tensor_t::vector) {
+                opt::const_step_update(
+                    get_data<la::vector<double>>(param_order[i]),
+                    get_data<la::vector<double>>(grad_order[i]),
+                    step_size);
+            } else if (grad_order[i]->type == tensor_t::matrix) {
+                opt::const_step_update(
+                    get_data<la::matrix<double>>(param_order[i]),
+                    get_data<la::matrix<double>>(grad_order[i]),
+                    step_size);
+            }
+        }
+    }
+
     void const_step_update_momentum(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
         std::shared_ptr<vertex> opt_data, double momentum, double step_size)
     {
@@ -548,6 +571,24 @@ namespace tensor_tree {
 
     optimizer::~optimizer()
     {}
+
+    const_step_opt::const_step_opt(std::shared_ptr<vertex> param,
+        double step_size)
+        : param(param), step_size(step_size)
+    {}
+
+    void const_step_opt::update(std::shared_ptr<vertex> grad)
+    {
+        const_step_update(param, grad, step_size);
+    }
+
+    void const_step_opt::save_opt_data(std::ostream& os) const
+    {
+    }
+
+    void const_step_opt::load_opt_data(std::istream& is)
+    {
+    }
 
     adagrad_opt::adagrad_opt(std::shared_ptr<vertex> param,
         double step_size)

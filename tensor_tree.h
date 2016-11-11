@@ -57,6 +57,9 @@ namespace tensor_tree {
 
     bool has_nan(std::shared_ptr<vertex> root);
 
+    void const_step_update(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
+        double step_size);
+
     void const_step_update_momentum(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
         std::shared_ptr<vertex> opt_data, double momentum, double step_size);
 
@@ -93,6 +96,23 @@ namespace tensor_tree {
         virtual void save_opt_data(std::ostream& os) const = 0;
 
         virtual void load_opt_data(std::istream& is) = 0;
+
+    };
+
+    struct const_step_opt
+        : public optimizer {
+
+        std::shared_ptr<vertex> param;
+        double step_size;
+
+        const_step_opt(std::shared_ptr<vertex> param,
+            double step_size);
+
+        virtual void update(std::shared_ptr<vertex> grad) override;
+
+        virtual void save_opt_data(std::ostream& os) const override;
+
+        virtual void load_opt_data(std::istream& is) override;
 
     };
 
