@@ -10,6 +10,21 @@ namespace lstm {
 
     // lstm
 
+    struct lstm_tensor_tree_factory {
+
+        virtual ~lstm_tensor_tree_factory();
+
+        virtual std::shared_ptr<tensor_tree::vertex> operator()() const;
+
+    };
+
+    struct dyer_lstm_tensor_tree_factory
+        : public lstm_tensor_tree_factory {
+
+        virtual std::shared_ptr<tensor_tree::vertex> operator()() const;
+
+    };
+
     std::shared_ptr<tensor_tree::vertex> make_lstm_tensor_tree();
 
     struct lstm_step_nn_t {
@@ -26,21 +41,52 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> output,
         std::shared_ptr<autodiff::op_t> input);
 
+    lstm_step_nn_t make_dyer_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> cell,
+        std::shared_ptr<autodiff::op_t> output,
+        std::shared_ptr<autodiff::op_t> input);
+
     struct lstm_nn_t {
         std::vector<std::shared_ptr<autodiff::op_t>> cell;
         std::vector<std::shared_ptr<autodiff::op_t>> output;
     };
 
     struct lstm_builder {
+
         virtual ~lstm_builder();
+
+        virtual lstm_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const;
+
+    };
+
+    struct dyer_lstm_builder
+        : public lstm_builder {
+
+        std::shared_ptr<autodiff::op_t> one;
+
+        dyer_lstm_builder(std::shared_ptr<autodiff::op_t> one);
 
         virtual lstm_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
             std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const;
     };
 
-    std::shared_ptr<tensor_tree::vertex> make_bi_lstm_tensor_tree();
-
     // bidirectional lstm
+
+    struct bi_lstm_tensor_tree_factory {
+
+        std::shared_ptr<lstm_tensor_tree_factory> base_fac;
+
+        bi_lstm_tensor_tree_factory();
+        bi_lstm_tensor_tree_factory(std::shared_ptr<lstm_tensor_tree_factory> base_fac);
+
+        virtual ~bi_lstm_tensor_tree_factory();
+
+        virtual std::shared_ptr<tensor_tree::vertex> operator()() const;
+
+    };
+
+    std::shared_ptr<tensor_tree::vertex> make_bi_lstm_tensor_tree();
 
     struct bi_lstm_nn_t {
         lstm_nn_t forward_nn;
@@ -56,6 +102,17 @@ namespace lstm {
     struct bi_lstm_builder {
 
         virtual ~bi_lstm_builder();
+
+        virtual bi_lstm_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const;
+    };
+
+    struct dyer_bi_lstm_builder
+        : public bi_lstm_builder {
+
+        std::shared_ptr<autodiff::op_t> one;
+
+        dyer_bi_lstm_builder(std::shared_ptr<autodiff::op_t> one);
 
         virtual bi_lstm_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
             std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const;
@@ -102,6 +159,20 @@ namespace lstm {
     };
 
     // stacked bidirectional lstm
+
+    struct stacked_bi_lstm_tensor_tree_factory {
+
+        int layer;
+        std::shared_ptr<bi_lstm_tensor_tree_factory> base_fac;
+
+        stacked_bi_lstm_tensor_tree_factory(int layer);
+        stacked_bi_lstm_tensor_tree_factory(int layer, std::shared_ptr<bi_lstm_tensor_tree_factory> base_fac);
+
+        virtual ~stacked_bi_lstm_tensor_tree_factory();
+
+        virtual std::shared_ptr<tensor_tree::vertex> operator()() const;
+
+    };
 
     std::shared_ptr<tensor_tree::vertex> make_stacked_bi_lstm_tensor_tree(int layer);
 

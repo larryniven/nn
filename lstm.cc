@@ -5,7 +5,10 @@
 
 namespace lstm {
 
-    std::shared_ptr<tensor_tree::vertex> make_lstm_tensor_tree()
+    lstm_tensor_tree_factory::~lstm_tensor_tree_factory()
+    {}
+
+    std::shared_ptr<tensor_tree::vertex> lstm_tensor_tree_factory::operator()() const
     {
         tensor_tree::vertex root { tensor_tree::tensor_t::nil };
 
@@ -33,6 +36,36 @@ namespace lstm {
         root.children.push_back(tensor_tree::make_vector("forget gate bias"));
 
         return std::make_shared<tensor_tree::vertex>(root);
+    }
+
+    std::shared_ptr<tensor_tree::vertex> dyer_lstm_tensor_tree_factory::operator()() const
+    {
+        tensor_tree::vertex root { tensor_tree::tensor_t::nil };
+
+        // 0
+        root.children.push_back(tensor_tree::make_matrix("input -> hidden"));
+        root.children.push_back(tensor_tree::make_matrix("output -> hidden"));
+        root.children.push_back(tensor_tree::make_vector("hidden bias"));
+
+        // 3
+        root.children.push_back(tensor_tree::make_matrix("input -> input gate"));
+        root.children.push_back(tensor_tree::make_matrix("output -> input gate"));
+        root.children.push_back(tensor_tree::make_matrix("input gate peep"));
+        root.children.push_back(tensor_tree::make_vector("input gate bias"));
+
+        // 7
+        root.children.push_back(tensor_tree::make_matrix("input -> output gate"));
+        root.children.push_back(tensor_tree::make_matrix("output -> output gate"));
+        root.children.push_back(tensor_tree::make_matrix("output gate peep"));
+        root.children.push_back(tensor_tree::make_vector("output gate bias"));
+
+        return std::make_shared<tensor_tree::vertex>(root);
+    }
+
+    std::shared_ptr<tensor_tree::vertex> make_lstm_tensor_tree()
+    {
+        lstm_tensor_tree_factory f;
+        return f();
     }
 
     lstm_step_nn_t make_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
@@ -97,6 +130,65 @@ namespace lstm {
         return result;
     }
 
+    lstm_step_nn_t make_dyer_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> cell,
+        std::shared_ptr<autodiff::op_t> output,
+        std::shared_ptr<autodiff::op_t> input,
+        std::shared_ptr<autodiff::op_t> one)
+    {
+        lstm_step_nn_t result;
+
+        result.input = nullptr;
+
+        std::vector<std::shared_ptr<autodiff::op_t>> h_comp { get_var(var_tree->children[2]) };
+        std::vector<std::shared_ptr<autodiff::op_t>> input_gate_comp { get_var(var_tree->children[6]) };
+
+        if (input != nullptr) {
+            result.input = autodiff::mul(get_var(var_tree->children[0]), input);
+            h_comp.push_back(result.input);
+            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[3]), input));
+        }
+
+        if (output != nullptr) {
+            h_comp.push_back(autodiff::mul(get_var(var_tree->children[1]), output));
+            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[4]), output));
+        }
+
+        if (cell != nullptr) {
+            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[5]), cell));
+        }
+
+        std::shared_ptr<autodiff::op_t> h = autodiff::tanh(autodiff::add(h_comp));
+        result.input_gate = autodiff::logistic(autodiff::add(input_gate_comp));
+        result.forget_gate = autodiff::sub(one, result.input_gate);
+
+        if (cell != nullptr) {
+            result.cell = autodiff::add(
+                autodiff::emul(result.forget_gate, cell),
+                autodiff::emul(result.input_gate, h));
+        } else {
+            result.cell = autodiff::emul(result.input_gate, h);
+        }
+
+        std::vector<std::shared_ptr<autodiff::op_t>> output_gate_comp {
+            get_var(var_tree->children[10]), autodiff::mul(get_var(var_tree->children[9]), result.cell) };
+
+        if (input != nullptr) {
+            output_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[7]), input));
+        }
+
+        if (output != nullptr) {
+            output_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[8]), output));
+        }
+
+        result.output_gate = autodiff::logistic(autodiff::add(output_gate_comp));
+
+        result.output = autodiff::emul(result.output_gate,
+            autodiff::tanh(result.cell));
+
+        return result;
+    }
+
     lstm_builder::~lstm_builder()
     {}
 
@@ -120,18 +212,60 @@ namespace lstm {
         return result;
     }
 
-    std::shared_ptr<tensor_tree::vertex> make_bi_lstm_tensor_tree()
+    dyer_lstm_builder::dyer_lstm_builder(std::shared_ptr<autodiff::op_t> one)
+        : one(one)
+    {}
+
+    lstm_nn_t dyer_lstm_builder::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
+    {
+        lstm_nn_t result;
+
+        std::shared_ptr<autodiff::op_t> cell = nullptr;
+        std::shared_ptr<autodiff::op_t> output = nullptr;
+
+        for (int i = 0; i < feat.size(); ++i) {
+            lstm_step_nn_t step_nn = make_dyer_lstm_step_nn(var_tree, cell, output, feat[i], one);
+            cell = step_nn.cell;
+            output = step_nn.output;
+
+            result.cell.push_back(cell);
+            result.output.push_back(output);
+        }
+
+        return result;
+    }
+
+    bi_lstm_tensor_tree_factory::bi_lstm_tensor_tree_factory()
+        : base_fac(std::make_shared<lstm_tensor_tree_factory>(lstm_tensor_tree_factory{}))
+    {}
+
+    bi_lstm_tensor_tree_factory::bi_lstm_tensor_tree_factory(
+        std::shared_ptr<lstm_tensor_tree_factory> base_fac)
+        : base_fac(base_fac)
+    {}
+
+    bi_lstm_tensor_tree_factory::~bi_lstm_tensor_tree_factory()
+    {}
+
+    std::shared_ptr<tensor_tree::vertex> bi_lstm_tensor_tree_factory::operator()() const
     {
         tensor_tree::vertex root;
 
-        root.children.push_back(make_lstm_tensor_tree());
-        root.children.push_back(make_lstm_tensor_tree());
+        root.children.push_back((*base_fac)());
+        root.children.push_back((*base_fac)());
 
         root.children.push_back(tensor_tree::make_matrix("forward output weight"));
         root.children.push_back(tensor_tree::make_matrix("backward output weight"));
         root.children.push_back(tensor_tree::make_vector("output bias"));
 
         return std::make_shared<tensor_tree::vertex>(root);
+    }
+
+    std::shared_ptr<tensor_tree::vertex> make_bi_lstm_tensor_tree()
+    {
+        bi_lstm_tensor_tree_factory f;
+        return f();
     }
 
     bi_lstm_nn_t make_bi_lstm_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
@@ -166,6 +300,16 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
     {
         return make_bi_lstm_nn(var_tree, feat, lstm_builder{});
+    }
+
+    dyer_bi_lstm_builder::dyer_bi_lstm_builder(std::shared_ptr<autodiff::op_t> one)
+        : one(one)
+    {}
+
+    bi_lstm_nn_t dyer_bi_lstm_builder::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
+    {
+        return make_bi_lstm_nn(var_tree, feat, dyer_lstm_builder{one});
     }
 
     bi_lstm_input_dropout::bi_lstm_input_dropout(
@@ -242,15 +386,35 @@ namespace lstm {
         }
     }
 
-    std::shared_ptr<tensor_tree::vertex> make_stacked_bi_lstm_tensor_tree(int layer)
+    stacked_bi_lstm_tensor_tree_factory::stacked_bi_lstm_tensor_tree_factory(int layer)
+        : layer(layer)
+        , base_fac(std::make_shared<bi_lstm_tensor_tree_factory>(bi_lstm_tensor_tree_factory{}))
+    {}
+
+    stacked_bi_lstm_tensor_tree_factory::stacked_bi_lstm_tensor_tree_factory(
+        int layer,
+        std::shared_ptr<bi_lstm_tensor_tree_factory> base_fac)
+        : layer(layer), base_fac(base_fac)
+    {}
+
+    stacked_bi_lstm_tensor_tree_factory::~stacked_bi_lstm_tensor_tree_factory()
+    {}
+
+    std::shared_ptr<tensor_tree::vertex> stacked_bi_lstm_tensor_tree_factory::operator()() const
     {
         tensor_tree::vertex root;
 
         for (int i = 0; i < layer; ++i) {
-            root.children.push_back(make_bi_lstm_tensor_tree());
+            root.children.push_back((*base_fac)());
         }
 
         return std::make_shared<tensor_tree::vertex>(root);
+    }
+
+    std::shared_ptr<tensor_tree::vertex> make_stacked_bi_lstm_tensor_tree(int layer)
+    {
+        stacked_bi_lstm_tensor_tree_factory f(layer);
+        return f();
     }
 
     stacked_bi_lstm_nn_t make_stacked_bi_lstm_nn(
