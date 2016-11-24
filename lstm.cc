@@ -335,7 +335,7 @@ namespace lstm {
             la::vector<double> v;
             v.resize(m.cols());
             for (int d = 0; d < v.size(); ++d) {
-                v(d) = bernoulli(gen);
+                v(d) = bernoulli(gen) / (1.0 - prob);
             }
             std::shared_ptr<autodiff::op_t> input_mask = g.var(std::move(v));
             masked_input.push_back(autodiff::emul(feat[j], input_mask));
