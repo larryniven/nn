@@ -9,7 +9,7 @@ clean:
 	-rm *.o
 	-rm libnn.a
 
-libnn.a: nn.o rhn.o gru.o lstm.o pred.o lstm-seg.o residual.o tensor_tree.o lstm-frame.o
+libnn.a: nn.o rhn.o gru.o lstm.o pred.o lstm-seg.o residual.o tensor-tree.o lstm-frame.o lstm-tensor-tree.o
 	$(AR) rcs $@ $^
 
 nn.o: nn.h
@@ -18,5 +18,5 @@ lstm-seg.o: lstm-seg.h
 gru.o: gru.h
 pred.o: pred.h
 residual.o: residual.h
-tensor_tree.o: tensor_tree.h
+tensor-tree.o: tensor-tree.h
 

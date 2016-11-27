@@ -1,4 +1,5 @@
-#include "lstm-seg.h"
+#include "nn/lstm-seg.h"
+#include "nn/lstm-tensor-tree.h"
 
 namespace lstm_seg {
 

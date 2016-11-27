@@ -1,6 +1,7 @@
 #include "nn/lstm-frame.h"
 #include "nn/lstm.h"
 #include "nn/pred.h"
+#include "nn/lstm-tensor-tree.h"
 
 namespace lstm_frame {
 

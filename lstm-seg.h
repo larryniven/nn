@@ -3,7 +3,7 @@
 
 #include <memory>
 #include "autodiff/autodiff.h"
-#include "nn/tensor_tree.h"
+#include "nn/tensor-tree.h"
 #include "nn/lstm.h"
 
 namespace lstm_seg {

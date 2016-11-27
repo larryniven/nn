@@ -1,4 +1,4 @@
-#include "tensor_tree.h"
+#include "nn/tensor-tree.h"
 #include "ebt/ebt.h"
 #include "la/la.h"
 #include "opt/opt.h"
@@ -200,13 +200,13 @@ namespace tensor_tree {
 
         for (int i = 0; i < order.size(); ++i) {
             if (order[i]->type == tensor_t::vector) {
-                result += la::norm(get_vector(order[i]));
+                result += std::pow(la::norm(get_vector(order[i])), 2);
             } else if (order[i]->type == tensor_t::matrix) {
-                result += la::norm(get_matrix(order[i]));
+                result += std::pow(la::norm(get_matrix(order[i])), 2);
             }
         }
 
-        return result;
+        return std::sqrt(result);
     }
 
     bool has_nan(std::shared_ptr<vertex> root)

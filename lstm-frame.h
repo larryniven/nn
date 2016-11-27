@@ -2,7 +2,7 @@
 #define LSTM_FRAME_h
 
 #include <memory>
-#include "nn/tensor_tree.h"
+#include "nn/tensor-tree.h"
 
 namespace lstm_frame {
 

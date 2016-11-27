@@ -4,7 +4,7 @@
 #include "la/la.h"
 #include "autodiff/autodiff.h"
 #include <random>
-#include "nn/tensor_tree.h"
+#include "nn/tensor-tree.h"
 
 namespace rhn {
 
