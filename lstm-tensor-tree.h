@@ -35,7 +35,8 @@ namespace lstm {
 
     std::shared_ptr<tensor_tree::vertex> make_lstm_tensor_tree();
 
-    struct bi_lstm_tensor_tree_factory {
+    struct bi_lstm_tensor_tree_factory
+        : public lstm_tensor_tree_factory {
 
         std::shared_ptr<lstm_tensor_tree_factory> base_fac;
 
@@ -49,20 +50,6 @@ namespace lstm {
     };
 
     std::shared_ptr<tensor_tree::vertex> make_bi_lstm_tensor_tree();
-
-    struct stacked_bi_lstm_tensor_tree_factory {
-
-        int layer;
-        std::shared_ptr<bi_lstm_tensor_tree_factory> base_fac;
-
-        stacked_bi_lstm_tensor_tree_factory(int layer);
-        stacked_bi_lstm_tensor_tree_factory(int layer, std::shared_ptr<bi_lstm_tensor_tree_factory> base_fac);
-
-        virtual ~stacked_bi_lstm_tensor_tree_factory();
-
-        virtual std::shared_ptr<tensor_tree::vertex> operator()() const;
-
-    };
 
     std::shared_ptr<tensor_tree::vertex> make_stacked_bi_lstm_tensor_tree(int layer);
 

@@ -98,13 +98,13 @@ namespace lstm {
         : public bi_lstm_builder {
 
         autodiff::computation_graph& comp_graph;
-        int dim;
+        unsigned int dim;
         std::default_random_engine& gen;
         double prob;
         std::shared_ptr<bi_lstm_builder> builder;
 
         bi_lstm_input_dropout(autodiff::computation_graph& comp_graph,
-            int dim,
+            unsigned int dim,
             std::default_random_engine& gen, double prob,
             std::shared_ptr<bi_lstm_builder> builder);
 
@@ -116,12 +116,12 @@ namespace lstm {
         : public bi_lstm_builder {
 
         autodiff::computation_graph& comp_graph;
-        int dim;
+        unsigned int dim;
         double scale;
         std::shared_ptr<bi_lstm_builder> builder;
 
         bi_lstm_input_scaling(autodiff::computation_graph& comp_graph,
-            int dim,
+            unsigned int dim,
             double scale,
             std::shared_ptr<bi_lstm_builder> builder);
 
@@ -301,6 +301,19 @@ namespace lstm {
         : public transcriber {
 
         std::vector<std::shared_ptr<transcriber>> layer;
+
+        virtual std::vector<std::shared_ptr<autodiff::op_t>> operator()(
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const override;
+
+    };
+
+    struct logsoftmax_transcriber
+        : public transcriber {
+
+        std::shared_ptr<transcriber> base;
+
+        logsoftmax_transcriber(std::shared_ptr<transcriber> base);
 
         virtual std::vector<std::shared_ptr<autodiff::op_t>> operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,

@@ -19,16 +19,16 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> forget_gate_comp { get_var(var_tree->children[14]) };
 
         if (input != nullptr) {
-            result.input = autodiff::mul(get_var(var_tree->children[0]), input);
+            result.input = autodiff::mul(input, get_var(var_tree->children[0]));
             h_comp.push_back(result.input);
-            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[3]), input));
-            forget_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[11]), input));
+            input_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[3])));
+            forget_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[11])));
         }
 
         if (output != nullptr) {
-            h_comp.push_back(autodiff::mul(get_var(var_tree->children[1]), output));
-            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[4]), output));
-            forget_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[12]), output));
+            h_comp.push_back(autodiff::mul(output, get_var(var_tree->children[1])));
+            input_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[4])));
+            forget_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[12])));
         }
 
         if (cell != nullptr) {
@@ -52,11 +52,11 @@ namespace lstm {
             get_var(var_tree->children[10]), autodiff::emul(get_var(var_tree->children[9]), result.cell) };
 
         if (input != nullptr) {
-            output_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[7]), input));
+            output_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[7])));
         }
 
         if (output != nullptr) {
-            output_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[8]), output));
+            output_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[8])));
         }
 
         result.output_gate = autodiff::logistic(autodiff::add(output_gate_comp));
@@ -75,9 +75,9 @@ namespace lstm {
         lstm_step_nn_t result;
 
         autodiff::computation_graph& graph = *tensor_tree::get_var(var_tree->children[0])->graph;
-        la::vector<double>& h_vec = autodiff::get_output<la::vector<double>>(
+        la::tensor<double>& h_vec = autodiff::get_output<la::tensor<double>>(
             tensor_tree::get_var(var_tree->children[2]));
-        int h_dim = h_vec.size();
+        unsigned int h_dim = h_vec.vec_size();
 
         result.input = nullptr;
 
@@ -85,22 +85,22 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> input_gate_comp { get_var(var_tree->children[6]) };
 
         if (input != nullptr) {
-            result.input = autodiff::mul(get_var(var_tree->children[0]), input);
+            result.input = autodiff::mul(input, get_var(var_tree->children[0]));
             h_comp.push_back(result.input);
-            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[3]), input));
+            input_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[3])));
         }
 
         if (output != nullptr) {
-            h_comp.push_back(autodiff::mul(get_var(var_tree->children[1]), output));
-            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[4]), output));
+            h_comp.push_back(autodiff::mul(output, get_var(var_tree->children[1])));
+            input_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[4])));
         }
 
         if (cell != nullptr) {
-            input_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[5]), cell));
+            input_gate_comp.push_back(autodiff::mul(cell, get_var(var_tree->children[5])));
         }
 
-        la::vector<double> one_vec;
-        one_vec.resize(h_dim, 1);
+        la::tensor<double> one_vec;
+        one_vec.resize({ h_dim }, 1);
         auto one = graph.var(std::move(one_vec));
 
         std::shared_ptr<autodiff::op_t> h = autodiff::tanh(autodiff::add(h_comp));
@@ -116,14 +116,14 @@ namespace lstm {
         }
 
         std::vector<std::shared_ptr<autodiff::op_t>> output_gate_comp {
-            get_var(var_tree->children[10]), autodiff::mul(get_var(var_tree->children[9]), result.cell) };
+            get_var(var_tree->children[10]), autodiff::mul(result.cell, get_var(var_tree->children[9])) };
 
         if (input != nullptr) {
-            output_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[7]), input));
+            output_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[7])));
         }
 
         if (output != nullptr) {
-            output_gate_comp.push_back(autodiff::mul(get_var(var_tree->children[8]), output));
+            output_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[8])));
         }
 
         result.output_gate = autodiff::logistic(autodiff::add(output_gate_comp));
@@ -209,8 +209,8 @@ namespace lstm {
 
         for (int i = 0; i < result.forward_nn.output.size(); ++i) {
             result.output.push_back(autodiff::add(std::vector<std::shared_ptr<autodiff::op_t>> {
-                autodiff::mul(get_var(var_tree->children[2]), result.forward_nn.output[i]),
-                autodiff::mul(get_var(var_tree->children[3]), result.backward_nn.output[i]),
+                autodiff::mul(result.forward_nn.output[i], get_var(var_tree->children[2])),
+                autodiff::mul(result.backward_nn.output[i], get_var(var_tree->children[3])),
                 get_var(var_tree->children[4])
             }));
         }
@@ -239,7 +239,7 @@ namespace lstm {
 
     bi_lstm_input_dropout::bi_lstm_input_dropout(
         autodiff::computation_graph& comp_graph,
-        int dim,
+        unsigned int dim,
         std::default_random_engine& gen,
         double prob,
         std::shared_ptr<bi_lstm_builder> builder)
@@ -254,10 +254,10 @@ namespace lstm {
         std::bernoulli_distribution bernoulli(1.0 - prob);
 
         for (int j = 0; j < feat.size(); ++j) {
-            la::vector<double> v;
-            v.resize(dim);
-            for (int d = 0; d < v.size(); ++d) {
-                v(d) = bernoulli(gen) / (1.0 - prob);
+            la::tensor<double> v;
+            v.resize({dim});
+            for (int d = 0; d < v.vec_size(); ++d) {
+                v({d}) = bernoulli(gen) / (1.0 - prob);
             }
             std::shared_ptr<autodiff::op_t> input_mask = comp_graph.var(std::move(v));
             masked_input.push_back(autodiff::emul(feat[j], input_mask));
@@ -267,7 +267,7 @@ namespace lstm {
     }
 
     bi_lstm_input_scaling::bi_lstm_input_scaling(
-        autodiff::computation_graph& comp_graph, int dim, double scale,
+        autodiff::computation_graph& comp_graph, unsigned int dim, double scale,
         std::shared_ptr<bi_lstm_builder> builder)
         : comp_graph(comp_graph), dim(dim), scale(scale), builder(builder)
     {}
@@ -278,8 +278,8 @@ namespace lstm {
         std::vector<std::shared_ptr<autodiff::op_t>> masked_input;
 
         for (int j = 0; j < feat.size(); ++j) {
-            la::vector<double> v;
-            v.resize(dim, scale);
+            la::tensor<double> v;
+            v.resize({dim}, scale);
             std::shared_ptr<autodiff::op_t> input_mask = comp_graph.var(std::move(v));
             masked_input.push_back(autodiff::emul(feat[j], input_mask));
         }
@@ -582,16 +582,16 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> output,
         std::shared_ptr<autodiff::op_t> input) const
     {
-        la::vector<double> mask;
+        la::tensor<double> mask;
         auto m_var = tensor_tree::get_var(var_tree->children[0]);
         autodiff::computation_graph& graph = *m_var->graph;
-        la::matrix<double>& m = autodiff::get_output<la::matrix<double>>(m_var);
-        mask.resize(m.cols());
+        la::tensor_like<double>& m = autodiff::get_output<la::tensor_like<double>>(m_var);
+        mask.resize({m.size(0)});
 
         std::bernoulli_distribution dist { 1.0 - prob };
 
-        for (int i = 0; i < m.cols(); ++i) {
-            mask(i) = dist(gen) / (1.0 - prob);
+        for (int i = 0; i < m.size(0); ++i) {
+            mask({i}) = dist(gen) / (1.0 - prob);
         }
 
         return (*base)(var_tree, cell, output, autodiff::emul(graph.var(std::move(mask)), input));
@@ -609,16 +609,16 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> output,
         std::shared_ptr<autodiff::op_t> input) const
     {
-        la::vector<double> mask;
+        la::tensor<double> mask;
         auto m_var = tensor_tree::get_var(var_tree->children[0]);
         autodiff::computation_graph& graph = *m_var->graph;
-        la::matrix<double>& m = autodiff::get_output<la::matrix<double>>(m_var);
-        mask.resize(m.rows());
+        la::tensor<double>& m = autodiff::get_output<la::tensor<double>>(m_var);
+        mask.resize({m.size(1)});
 
         std::bernoulli_distribution dist { 1.0 - prob };
 
-        for (int i = 0; i < m.rows(); ++i) {
-            mask(i) = dist(gen) / (1.0 - prob);
+        for (int i = 0; i < m.size(1); ++i) {
+            mask({i}) = dist(gen) / (1.0 - prob);
         }
 
         lstm_step_nn_t result = (*base)(var_tree, cell, output, input);
@@ -691,8 +691,8 @@ namespace lstm {
 
         for (int i = 0; i < forward.size(); ++i) {
             result.push_back(autodiff::add(std::vector<std::shared_ptr<autodiff::op_t>> {
-                autodiff::mul(get_var(var_tree->children[2]), forward[i]),
-                autodiff::mul(get_var(var_tree->children[3]), backward[i]),
+                autodiff::mul(forward[i], get_var(var_tree->children[2])),
+                autodiff::mul(backward[i], get_var(var_tree->children[3])),
                 get_var(var_tree->children[4])
             }));
         }
@@ -713,6 +713,31 @@ namespace lstm {
         }
 
         return output;
+    }
+
+    logsoftmax_transcriber::logsoftmax_transcriber(
+        std::shared_ptr<transcriber> base)
+        : base(base)
+    {}
+
+    std::vector<std::shared_ptr<autodiff::op_t>> logsoftmax_transcriber::operator()(
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
+    {
+        std::vector<std::shared_ptr<autodiff::op_t>> output = (*base)(var_tree->children[0], feat);
+
+        std::vector<std::shared_ptr<autodiff::op_t>> result;
+
+        for (int i = 0; i < output.size(); ++i) {
+            result.push_back(autodiff::logsoftmax(
+                autodiff::add(
+                    autodiff::mul(output[i], tensor_tree::get_var(var_tree->children[1])),
+                    tensor_tree::get_var(var_tree->children[2])
+                )
+            ));
+        }
+
+        return result;
     }
 
     subsampled_transcriber::subsampled_transcriber(

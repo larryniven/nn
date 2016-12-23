@@ -12,6 +12,7 @@ namespace tensor_tree {
         nil,
         vector,
         matrix,
+        tensor,
         autodiff_var
     };
 
@@ -27,6 +28,7 @@ namespace tensor_tree {
 
     std::shared_ptr<vertex> make_vector(std::string name = "");
     std::shared_ptr<vertex> make_matrix(std::string name = "");
+    std::shared_ptr<vertex> make_tensor(std::string name = "");
 
     template <class vec>
     vec& get_data(std::shared_ptr<vertex> const& t)
@@ -36,9 +38,10 @@ namespace tensor_tree {
 
     la::vector<double>& get_vector(std::shared_ptr<vertex> p);
     la::matrix<double>& get_matrix(std::shared_ptr<vertex> p);
+    la::tensor<double>& get_tensor(std::shared_ptr<vertex> p);
     std::shared_ptr<autodiff::op_t> get_var(std::shared_ptr<vertex> p);
 
-    std::vector<std::shared_ptr<vertex>> pre_order(std::shared_ptr<vertex> root);
+    std::vector<std::shared_ptr<vertex>> leaves_pre_order(std::shared_ptr<vertex> root);
 
     void load_tensor(std::shared_ptr<vertex> root, std::istream& is);
     void load_tensor(std::shared_ptr<vertex> root, std::string filename);
