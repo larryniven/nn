@@ -594,7 +594,8 @@ namespace lstm {
             mask({i}) = dist(gen) / (1.0 - prob);
         }
 
-        return (*base)(var_tree, cell, output, autodiff::emul(graph.var(std::move(mask)), input));
+        auto mask_var = graph.var(std::move(mask));
+        return (*base)(var_tree, cell, output, autodiff::emul(mask_var, input));
     }
 
     lstm_output_dropout_transcriber::lstm_output_dropout_transcriber(
@@ -623,7 +624,9 @@ namespace lstm {
 
         lstm_step_nn_t result = (*base)(var_tree, cell, output, input);
 
-        result.output = autodiff::emul(graph.var(std::move(mask)), result.output);
+        auto mask_var = graph.var(std::move(mask));
+
+        result.output = autodiff::emul(mask_var, result.output);
 
         return result;
     }
