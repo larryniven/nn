@@ -17,11 +17,11 @@ namespace nn {
 
     struct log_loss {
     
-        la::tensor<double> const& gold;
-        la::tensor<double> const& pred;
+        la::tensor_like<double> const& gold;
+        la::tensor_like<double> const& pred;
     
-        log_loss(la::tensor<double> const& gold,
-            la::tensor<double> const& pred);
+        log_loss(la::tensor_like<double> const& gold,
+            la::tensor_like<double> const& pred);
     
         double loss();
     

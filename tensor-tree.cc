@@ -605,7 +605,7 @@ namespace tensor_tree {
                     k->data = std::make_shared<la::matrix<double>>(la::matrix<double>(get_matrix(u)));
                 } else if (u->type == tensor_t::tensor) {
                     k->type = u->type;
-                    k->data = std::make_shared<la::tensor<double>>(la::tensor<double>(get_matrix(u)));
+                    k->data = std::make_shared<la::tensor<double>>(la::tensor<double>(get_tensor(u)));
                 }
 
                 vertex_map[u] = k;

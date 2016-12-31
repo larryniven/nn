@@ -25,8 +25,7 @@ namespace nn {
         return std::make_shared<tensor_tree::vertex>(root);
     }
 
-    log_loss::log_loss(
-        la::tensor<double> const& gold, la::tensor<double> const& pred)
+    log_loss::log_loss(la::tensor_like<double> const& gold, la::tensor_like<double> const& pred)
         : gold(gold), pred(pred)
     {}
     
