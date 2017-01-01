@@ -12,10 +12,11 @@ clean:
 # libnn.a: nn.o rhn.o gru.o lstm.o pred.o lstm-seg.o residual.o tensor-tree.o lstm-frame.o lstm-tensor-tree.o
 # 	$(AR) rcs $@ $^
 
-libnn.a: nn.o tensor-tree.o lstm.o lstm-frame.o lstm-tensor-tree.o
+libnn.a: nn.o cnn.o tensor-tree.o lstm.o lstm-frame.o lstm-tensor-tree.o
 	$(AR) rcs $@ $^
 
 nn.o: nn.h
+cnn.o: cnn.h
 lstm.o: lstm.h
 lstm-seg.o: lstm-seg.h
 gru.o: gru.h
