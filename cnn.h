@@ -61,6 +61,46 @@ namespace cnn {
             std::shared_ptr<tensor_tree::vertex> var_tree) override;
     };
 
+    std::vector<std::shared_ptr<autodiff::op_t>> ifo_pooling(
+        std::vector<std::shared_ptr<autodiff::op_t>> input,
+        std::vector<std::shared_ptr<autodiff::op_t>> input_gate,
+        std::vector<std::shared_ptr<autodiff::op_t>> forget_gate,
+        std::vector<std::shared_ptr<autodiff::op_t>> output_gate);
+
+    std::vector<std::shared_ptr<autodiff::op_t>> conv_ifo_pooling(
+        std::shared_ptr<autodiff::op_t> output,
+        std::shared_ptr<autodiff::op_t> input_gate,
+        std::shared_ptr<autodiff::op_t> forget_gate,
+        std::shared_ptr<autodiff::op_t> output_gate,
+        int size);
+
+    std::vector<std::shared_ptr<autodiff::op_t>> conv_fo_pooling(
+        std::shared_ptr<autodiff::op_t> output,
+        std::shared_ptr<autodiff::op_t> forget_gate,
+        std::shared_ptr<autodiff::op_t> output_gate,
+        int size);
+
+    struct conv_fo_pooling_transcriber
+        : public transcriber {
+
+        unsigned int rows;
+        unsigned int cols;
+
+        std::shared_ptr<transcriber> input_conv;
+        std::shared_ptr<transcriber> forget_gate_conv;
+        std::shared_ptr<transcriber> output_gate_conv;
+
+        conv_fo_pooling_transcriber(
+            unsigned int rows, unsigned int cols,
+            std::shared_ptr<transcriber> input,
+            std::shared_ptr<transcriber> forget_gate,
+            std::shared_ptr<transcriber> output_gate);
+
+        virtual std::shared_ptr<autodiff::op_t>
+        operator()(std::shared_ptr<autodiff::op_t> input,
+            std::shared_ptr<tensor_tree::vertex> var_tree) override;
+    };
+
 }
 
 #endif
