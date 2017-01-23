@@ -29,6 +29,20 @@ namespace nn {
     
     };
 
+    struct l2_loss {
+
+        la::tensor_like<double> const& gold;
+        la::tensor_like<double> const& pred;
+    
+        l2_loss(la::tensor_like<double> const& gold,
+            la::tensor_like<double> const& pred);
+    
+        double loss();
+    
+        la::tensor<double> grad();
+    
+    };
+
     struct seq_pred_nn_t {
         std::vector<std::shared_ptr<autodiff::op_t>> logprob;
     };

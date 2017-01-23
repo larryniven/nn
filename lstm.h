@@ -335,6 +335,17 @@ namespace lstm {
             std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const override;
     };
 
+    struct hypercolumn_transcriber
+        : public transcriber {
+
+        std::vector<std::shared_ptr<transcriber>> layer;
+
+        virtual std::vector<std::shared_ptr<autodiff::op_t>> operator()(
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const override;
+
+    };
+
 }
 
 #endif

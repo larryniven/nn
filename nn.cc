@@ -39,6 +39,28 @@ namespace nn {
         return la::mul(gold, -1);
     }
 
+    l2_loss::l2_loss(la::tensor_like<double> const& gold, la::tensor_like<double> const& pred)
+        : gold(gold), pred(pred)
+    {}
+    
+    double l2_loss::loss()
+    {
+        la::tensor<double> diff;
+        diff.resize(gold.sizes());
+        la::copy(diff, gold);
+        la::isub(diff, pred);
+
+        return la::dot(diff, diff);
+    }
+    
+    la::tensor<double> l2_loss::grad()
+    {
+        la::tensor<double> g = la::mul(pred, 2);
+        la::axpy(g, -2, gold);
+
+        return g;
+    }
+
     seq_pred_nn_t make_seq_pred_nn(
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat)

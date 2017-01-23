@@ -598,12 +598,15 @@ namespace tensor_tree {
                 std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {tensor_t::nil});
 
                 if (u->type == tensor_t::vector) {
+                    k->name = u->name;
                     k->type = u->type;
                     k->data = std::make_shared<la::vector<double>>(la::vector<double>(get_vector(u)));
                 } else if (u->type == tensor_t::matrix) {
+                    k->name = u->name;
                     k->type = u->type;
                     k->data = std::make_shared<la::matrix<double>>(la::matrix<double>(get_matrix(u)));
                 } else if (u->type == tensor_t::tensor) {
+                    k->name = u->name;
                     k->type = u->type;
                     k->data = std::make_shared<la::tensor<double>>(la::tensor<double>(get_tensor(u)));
                 }

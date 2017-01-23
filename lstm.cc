@@ -764,4 +764,40 @@ namespace lstm {
         return result;
     }
 
+    std::vector<std::shared_ptr<autodiff::op_t>> hypercolumn_transcriber::operator()(
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
+    {
+        std::vector<std::shared_ptr<autodiff::op_t>> const *input = &feat;
+        std::vector<std::shared_ptr<autodiff::op_t>> output;
+
+        std::vector<std::shared_ptr<autodiff::op_t>> result;
+
+        for (int j = 0; j < feat.size(); ++j) {
+            result.push_back(autodiff::add(
+                autodiff::mul(feat.at(j),
+                    tensor_tree::get_var(var_tree->children[1])),
+                tensor_tree::get_var(var_tree->children.back())
+            ));
+        }
+
+        for (int i = 0; i < layer.size(); ++i) {
+            output = (*layer[i])(var_tree->children[0]->children[i], *input);
+
+            int freq = std::round(double(feat.size()) / output.size());
+
+            for (int j = 0; j < feat.size(); ++j) {
+                result.at(j) = autodiff::add(
+                    autodiff::mul(output.at(j / freq),
+                        tensor_tree::get_var(var_tree->children[2 + i])),
+                    result.at(j)
+                );
+            }
+
+            input = &output;
+        }
+
+        return result;
+    }
+
 }
