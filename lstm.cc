@@ -781,6 +781,8 @@ namespace lstm {
             ));
         }
 
+        result.resize(feat.size());
+
         for (int i = 0; i < layer.size(); ++i) {
             output = (*layer[i])(var_tree->children[0]->children[i], *input);
 
