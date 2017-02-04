@@ -727,7 +727,13 @@ namespace lstm {
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
     {
-        std::vector<std::shared_ptr<autodiff::op_t>> output = (*base)(var_tree->children[0], feat);
+        std::vector<std::shared_ptr<autodiff::op_t>> output;
+
+        if (base == nullptr) {
+            output = feat;
+        } else {
+            output = (*base)(var_tree->children[0], feat);
+        }
 
         std::vector<std::shared_ptr<autodiff::op_t>> result;
 
