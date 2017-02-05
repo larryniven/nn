@@ -34,9 +34,9 @@ namespace nn {
         return -la::dot(gold, pred);
     }
     
-    la::tensor<double> log_loss::grad()
+    la::tensor<double> log_loss::grad(double scale)
     {
-        return la::mul(gold, -1);
+        return la::mul(gold, -scale);
     }
 
     l2_loss::l2_loss(la::tensor_like<double> const& gold, la::tensor_like<double> const& pred)
