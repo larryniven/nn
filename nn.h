@@ -25,7 +25,7 @@ namespace nn {
     
         double loss();
     
-        la::tensor<double> grad();
+        la::tensor<double> grad(double scale=0);
     
     };
 
