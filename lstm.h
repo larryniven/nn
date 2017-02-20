@@ -183,28 +183,6 @@ namespace lstm {
             std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const;
     };
 
-#if 0
-    struct lstm2d_nn_t {
-        std::vector<std::shared_ptr<autodiff::op_t>> h_cell;
-        std::vector<std::shared_ptr<autodiff::op_t>> h_output;
-        std::vector<std::shared_ptr<autodiff::op_t>> v_cell;
-        std::vector<std::shared_ptr<autodiff::op_t>> v_output;
-
-        std::vector<std::shared_ptr<autodiff::op_t>> output;
-    };
-
-    struct bi_lstm2d_nn_t {
-        lstm2d_nn_t forward_nn;
-        lstm2d_nn_t backward_nn;
-
-        std::vector<std::shared_ptr<autodiff::op_t>> output;
-    };
-
-    struct db_lstm2d_nn_t {
-        std::vector<bi_lstm2d_nn_t> layer;
-    };
-#endif
-
     struct lstm_step_transcriber {
 
         virtual ~lstm_step_transcriber();
@@ -259,6 +237,19 @@ namespace lstm {
             std::shared_ptr<autodiff::op_t> cell,
             std::shared_ptr<autodiff::op_t> output,
             std::shared_ptr<autodiff::op_t> input) const override;
+
+    };
+
+    struct lstm_multistep_transcriber
+        : public lstm_step_transcriber {
+
+        std::vector<std::shared_ptr<lstm_step_transcriber>> steps;
+
+        virtual lstm_step_nn_t operator()(
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> cell,
+            std::shared_ptr<autodiff::op_t> output,
+            std::shared_ptr<autodiff::op_t> input) const;
 
     };
 

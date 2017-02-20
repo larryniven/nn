@@ -4,7 +4,7 @@
 
 namespace rsg {
 
-    std::shared_ptr<tensor_tree::vertex> make_tensor_tree()
+    std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer)
     {
         lstm::dyer_lstm_tensor_tree_factory fac;
 
@@ -12,7 +12,14 @@ namespace rsg {
 
         root.children.push_back(tensor_tree::make_tensor("input weight"));
         root.children.push_back(tensor_tree::make_tensor("input bias"));
-        root.children.push_back(fac());
+
+        tensor_tree::vertex lstm_step;
+
+        for (int i = 0; i < layer; ++i) {
+            lstm_step.children.push_back(fac());
+        }
+
+        root.children.push_back(std::make_shared<tensor_tree::vertex>(lstm_step));
         root.children.push_back(tensor_tree::make_tensor("target weight"));
         root.children.push_back(tensor_tree::make_tensor("target bias"));
 
@@ -22,7 +29,8 @@ namespace rsg {
     std::vector<std::shared_ptr<autodiff::op_t>> make_training_nn(
         std::shared_ptr<autodiff::op_t> init_cell,
         std::vector<std::shared_ptr<autodiff::op_t>> const& gt_seq,
-        std::shared_ptr<tensor_tree::vertex> var_tree)
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<lstm::lstm_step_transcriber> step)
     {
         std::vector<std::shared_ptr<autodiff::op_t>> result;
 
@@ -33,10 +41,9 @@ namespace rsg {
         std::shared_ptr<autodiff::op_t> output = nullptr;
 
         for (int t = 0; t < gt_seq.size(); ++t) {
-            lstm::lstm_step_nn_t step = lstm::make_dyer_lstm_step_nn(
-                var_tree->children[2], cell, output, gt_seq.at(t));
-            cell = step.cell;
-            output = step.output;
+            lstm::lstm_step_nn_t nn = (*step)(var_tree->children[2], cell, output, gt_seq.at(t));
+            cell = nn.cell;
+            output = nn.output;
 
             result.push_back(autodiff::add(
                 autodiff::mul(output, tensor_tree::get_var(var_tree->children[3])),
@@ -50,7 +57,8 @@ namespace rsg {
         std::shared_ptr<autodiff::op_t> init_cell,
         std::shared_ptr<autodiff::op_t> init_input,
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        int steps)
+        int steps,
+        std::shared_ptr<lstm::lstm_step_transcriber> step)
     {
         std::vector<std::shared_ptr<autodiff::op_t>> result;
 
@@ -62,10 +70,9 @@ namespace rsg {
         std::shared_ptr<autodiff::op_t> input = init_input;
 
         for (int t = 0; t < steps; ++t) {
-            lstm::lstm_step_nn_t step = lstm::make_dyer_lstm_step_nn(
-                var_tree->children[2], cell, output, input);
-            cell = step.cell;
-            output = step.output;
+            lstm::lstm_step_nn_t nn = (*step)(var_tree->children[2], cell, output, input);
+            cell = nn.cell;
+            output = nn.output;
 
             std::shared_ptr<autodiff::op_t> target = autodiff::add(
                 autodiff::mul(output, tensor_tree::get_var(var_tree->children[3])),

@@ -430,134 +430,6 @@ namespace lstm {
         return make_zoneout_lstm_nn(var_tree, feat, mask, one);
     }
 
-#if 0
-    lstm2d_nn_t make_lstm2d_nn(autodiff::computation_graph& graph,
-        lstm2d_param_t const& param,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& inputs)
-    {
-        lstm2d_nn_t result;
-
-        result.h_nn = make_lstm_unit_nn(graph, param.h_param);
-        result.v_nn = make_lstm_unit_nn(graph, param.v_param);
-
-        result.output_h_weight = graph.var(param.output_h_weight);
-        result.output_v_weight = graph.var(param.output_v_weight);
-        result.output_bias = graph.var(param.output_bias);
-
-        std::shared_ptr<autodiff::op_t> h_cell = nullptr;
-        std::shared_ptr<autodiff::op_t> h_output = nullptr;
-
-        for (int i = 0; i < inputs.size(); ++i) {
-            lstm_step_nn_t h_step = make_lstm_step(result.h_nn, h_cell, h_output, inputs[i]);
-            h_cell = h_step.cell;
-            h_output = h_step.output;
-
-            result.h_cell.push_back(h_step.cell);
-            result.h_output.push_back(h_step.output);
-
-            lstm_step_nn_t v_step = make_lstm_step(result.v_nn, inputs[i], inputs[i], h_output);
-
-            result.v_cell.push_back(v_step.cell);
-            result.v_output.push_back(v_step.output);
-        }
-
-        for (int i = 0; i < result.h_cell.size(); ++i) {
-            result.output.push_back(autodiff::add(std::vector<std::shared_ptr<autodiff::op_t>> {
-                autodiff::mul(result.output_h_weight, result.h_output[i]),
-                autodiff::mul(result.output_v_weight, result.v_output[i]),
-                result.output_bias}));
-        }
-
-        return result;
-    }
-
-    lstm2d_nn_t stack_lstm2d(autodiff::computation_graph& graph,
-        lstm2d_param_t const& param,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& inputs,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& v_output,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& v_cell)
-    {
-        lstm2d_nn_t result;
-
-        result.h_nn = make_lstm_unit_nn(graph, param.h_param);
-        result.v_nn = make_lstm_unit_nn(graph, param.v_param);
-
-        result.output_h_weight = graph.var(param.output_h_weight);
-        result.output_v_weight = graph.var(param.output_v_weight);
-        result.output_bias = graph.var(param.output_bias);
-
-        std::shared_ptr<autodiff::op_t> h_cell = nullptr;
-        std::shared_ptr<autodiff::op_t> h_output = nullptr;
-
-        for (int i = 0; i < inputs.size(); ++i) {
-            lstm_step_nn_t h_step = make_lstm_step(result.h_nn, h_cell, h_output, inputs[i]);
-            h_cell = h_step.cell;
-            h_output = h_step.output;
-
-            result.h_cell.push_back(h_step.cell);
-            result.h_output.push_back(h_step.output);
-
-            lstm_step_nn_t v_step = make_lstm_step(result.v_nn, v_cell[i], v_output[i], h_output);
-
-            result.v_cell.push_back(v_step.cell);
-            result.v_output.push_back(v_step.output);
-        }
-
-        for (int i = 0; i < result.h_cell.size(); ++i) {
-            result.output.push_back(autodiff::add(std::vector<std::shared_ptr<autodiff::op_t>> {
-                autodiff::mul(result.output_h_weight, result.h_output[i]),
-                autodiff::mul(result.output_v_weight, result.v_output[i]),
-                result.output_bias}));
-        }
-
-        return result;
-    }
-
-    bi_lstm2d_nn_t stack_bi_lstm2d(autodiff::computation_graph& graph,
-        bi_lstm2d_param_t const& param, bi_lstm2d_nn_t const& prev)
-    {
-        bi_lstm2d_nn_t result;
-
-        result.forward_nn = stack_lstm2d(graph, param.forward_param, prev.output,
-            prev.forward_nn.v_output, prev.forward_nn.v_cell);
-
-        std::vector<std::shared_ptr<autodiff::op_t>> rev_output = prev.output;
-        std::reverse(rev_output.begin(), rev_output.end());
-
-        result.backward_nn = stack_lstm2d(graph, param.backward_param, rev_output,
-            prev.backward_nn.v_output, prev.backward_nn.v_cell);
-
-        std::reverse(result.backward_nn.h_cell.begin(), result.backward_nn.h_cell.end());
-        std::reverse(result.backward_nn.h_output.begin(), result.backward_nn.h_output.end());
-        std::reverse(result.backward_nn.v_cell.begin(), result.backward_nn.v_cell.end());
-        std::reverse(result.backward_nn.v_output.begin(), result.backward_nn.v_output.end());
-        std::reverse(result.backward_nn.output.begin(), result.backward_nn.output.end());
-
-        for (int i = 0; i < result.forward_nn.output.size(); ++i) {
-            result.output.push_back(autodiff::add(
-                result.forward_nn.output[i], result.backward_nn.output[i]));
-        }
-
-        return result;
-    }
-
-    db_lstm2d_nn_t make_db_lstm2d_nn(autodiff::computation_graph& graph,
-        db_lstm2d_param_t const& param,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& inputs)
-    {
-        db_lstm2d_nn_t result;
-
-        result.layer.push_back(make_bi_lstm2d_nn(graph, param.layer[0], inputs));
-
-        for (int i = 1; i < param.layer.size(); ++i) {
-            result.layer.push_back(stack_bi_lstm2d(graph, param.layer[i], result.layer.back()));
-        }
-
-        return result;
-    }
-
-#endif
-
     lstm_step_transcriber::~lstm_step_transcriber()
     {}
 
@@ -638,6 +510,24 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> input) const
     {
         return make_dyer_lstm_step_nn(var_tree, cell, output, input);
+    }
+
+    lstm_step_nn_t lstm_multistep_transcriber::operator()(
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> cell,
+        std::shared_ptr<autodiff::op_t> output,
+        std::shared_ptr<autodiff::op_t> input) const
+    {
+        lstm_step_nn_t nn;
+
+        for (int i = 0; i < steps.size(); ++i) {
+            nn = (*steps.at(i))(var_tree->children[i], cell, output, input);
+            output = nn.output;
+            cell = nn.cell;
+            input = nn.output;
+        }
+
+        return nn;
     }
 
     transcriber::~transcriber()
