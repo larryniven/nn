@@ -183,73 +183,84 @@ namespace lstm {
             std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const;
     };
 
-    struct lstm_step_transcriber {
+    // step transcriber
 
-        virtual ~lstm_step_transcriber();
+    struct step_transcriber {
 
-        virtual lstm_step_nn_t operator()(
+        virtual ~step_transcriber();
+
+        virtual std::shared_ptr<autodiff::op_t> operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> cell,
-            std::shared_ptr<autodiff::op_t> output,
-            std::shared_ptr<autodiff::op_t> input) const;
+            std::shared_ptr<autodiff::op_t> input) = 0;
 
     };
 
-    struct lstm_input_dropout_transcriber
-        : public lstm_step_transcriber {
+    struct lstm_step_transcriber
+        : public step_transcriber {
 
-        std::default_random_engine& gen;
-        double prob;
-        std::shared_ptr<lstm_step_transcriber> base;
+        std::shared_ptr<autodiff::op_t> cell;
+        std::shared_ptr<autodiff::op_t> output;
 
-        lstm_input_dropout_transcriber(std::default_random_engine& gen, double prob,
-            std::shared_ptr<lstm_step_transcriber> base);
+        lstm_step_transcriber();
 
-        virtual lstm_step_nn_t operator()(
+        virtual std::shared_ptr<autodiff::op_t> operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> cell,
-            std::shared_ptr<autodiff::op_t> output,
-            std::shared_ptr<autodiff::op_t> input) const;
+            std::shared_ptr<autodiff::op_t> input);
+
     };
 
-    struct lstm_output_dropout_transcriber
-        : public lstm_step_transcriber {
+    struct input_dropout_transcriber
+        : public step_transcriber {
 
         std::default_random_engine& gen;
         double prob;
-        std::shared_ptr<lstm_step_transcriber> base;
+        std::shared_ptr<step_transcriber> base;
 
-        lstm_output_dropout_transcriber(std::default_random_engine& gen, double prob,
-            std::shared_ptr<lstm_step_transcriber> base);
+        input_dropout_transcriber(std::default_random_engine& gen, double prob,
+            std::shared_ptr<step_transcriber> base);
 
-        virtual lstm_step_nn_t operator()(
+        virtual std::shared_ptr<autodiff::op_t> operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> cell,
-            std::shared_ptr<autodiff::op_t> output,
-            std::shared_ptr<autodiff::op_t> input) const;
+            std::shared_ptr<autodiff::op_t> input);
+    };
+
+    struct output_dropout_transcriber
+        : public step_transcriber {
+
+        std::default_random_engine& gen;
+        double prob;
+        std::shared_ptr<step_transcriber> base;
+
+        output_dropout_transcriber(std::default_random_engine& gen, double prob,
+            std::shared_ptr<step_transcriber> base);
+
+        virtual std::shared_ptr<autodiff::op_t> operator()(
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> input);
     };
 
     struct dyer_lstm_step_transcriber
-        : public lstm_step_transcriber {
+        : public step_transcriber {
 
-        virtual lstm_step_nn_t operator()(
+        std::shared_ptr<autodiff::op_t> cell;
+        std::shared_ptr<autodiff::op_t> output;
+
+        dyer_lstm_step_transcriber();
+
+        virtual std::shared_ptr<autodiff::op_t> operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> cell,
-            std::shared_ptr<autodiff::op_t> output,
-            std::shared_ptr<autodiff::op_t> input) const override;
+            std::shared_ptr<autodiff::op_t> input) override;
 
     };
 
     struct lstm_multistep_transcriber
-        : public lstm_step_transcriber {
+        : public step_transcriber {
 
-        std::vector<std::shared_ptr<lstm_step_transcriber>> steps;
+        std::vector<std::shared_ptr<step_transcriber>> steps;
 
-        virtual lstm_step_nn_t operator()(
+        virtual std::shared_ptr<autodiff::op_t> operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> cell,
-            std::shared_ptr<autodiff::op_t> output,
-            std::shared_ptr<autodiff::op_t> input) const;
+            std::shared_ptr<autodiff::op_t> input);
 
     };
 
@@ -266,9 +277,9 @@ namespace lstm {
     struct lstm_transcriber
         : public transcriber {
 
-        std::shared_ptr<lstm_step_transcriber> step;
+        std::shared_ptr<step_transcriber> step;
 
-        lstm_transcriber(std::shared_ptr<lstm_step_transcriber> step);
+        lstm_transcriber(std::shared_ptr<step_transcriber> step);
 
         virtual std::vector<std::shared_ptr<autodiff::op_t>> operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,

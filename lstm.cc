@@ -99,15 +99,16 @@ namespace lstm {
             input_gate_comp.push_back(autodiff::mul(cell, get_var(var_tree->children[5])));
         }
 
-        la::tensor<double> one_vec;
-        one_vec.resize({ h_dim }, 1);
-        auto one = graph.var(std::move(one_vec));
-
         std::shared_ptr<autodiff::op_t> h = autodiff::tanh(autodiff::add(h_comp));
         result.input_gate = autodiff::logistic(autodiff::add(input_gate_comp));
-        result.forget_gate = autodiff::sub(one, result.input_gate);
 
         if (cell != nullptr) {
+            la::tensor<double> one_vec;
+            one_vec.resize({ h_dim }, 1);
+            auto one = graph.var(std::move(one_vec));
+
+            result.forget_gate = autodiff::sub(one, result.input_gate);
+
             result.cell = autodiff::add(
                 autodiff::emul(result.forget_gate, cell),
                 autodiff::emul(result.input_gate, h));
@@ -430,29 +431,34 @@ namespace lstm {
         return make_zoneout_lstm_nn(var_tree, feat, mask, one);
     }
 
-    lstm_step_transcriber::~lstm_step_transcriber()
+    step_transcriber::~step_transcriber()
     {}
 
-    lstm_step_nn_t lstm_step_transcriber::operator()(
+    lstm_step_transcriber::lstm_step_transcriber()
+        : cell(nullptr), output(nullptr)
+    {}
+
+    std::shared_ptr<autodiff::op_t> lstm_step_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> cell,
-        std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> input) const
+        std::shared_ptr<autodiff::op_t> input)
     {
-        return make_lstm_step_nn(var_tree, cell, output, input);
+        lstm_step_nn_t nn = make_lstm_step_nn(var_tree, cell, output, input);
+
+        cell = nn.cell;
+        output = nn.output;
+
+        return nn.output;
     }
 
-    lstm_input_dropout_transcriber::lstm_input_dropout_transcriber(
+    input_dropout_transcriber::input_dropout_transcriber(
         std::default_random_engine& gen, double prob,
-        std::shared_ptr<lstm_step_transcriber> base)
+        std::shared_ptr<step_transcriber> base)
         : gen(gen), prob(prob), base(base)
     {}
 
-    lstm_step_nn_t lstm_input_dropout_transcriber::operator()(
+    std::shared_ptr<autodiff::op_t> input_dropout_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> cell,
-        std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> input) const
+        std::shared_ptr<autodiff::op_t> input)
     {
         la::tensor<double> mask;
         auto m_var = tensor_tree::get_var(var_tree->children[0]);
@@ -467,20 +473,18 @@ namespace lstm {
         }
 
         auto mask_var = graph.var(std::move(mask));
-        return (*base)(var_tree, cell, output, autodiff::emul(mask_var, input));
+        return (*base)(var_tree, autodiff::emul(mask_var, input));
     }
 
-    lstm_output_dropout_transcriber::lstm_output_dropout_transcriber(
+    output_dropout_transcriber::output_dropout_transcriber(
         std::default_random_engine& gen, double prob,
-        std::shared_ptr<lstm_step_transcriber> base)
+        std::shared_ptr<step_transcriber> base)
         : gen(gen), prob(prob), base(base)
     {}
 
-    lstm_step_nn_t lstm_output_dropout_transcriber::operator()(
+    std::shared_ptr<autodiff::op_t> output_dropout_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> cell,
-        std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> input) const
+        std::shared_ptr<autodiff::op_t> input)
     {
         la::tensor<double> mask;
         auto m_var = tensor_tree::get_var(var_tree->children[0]);
@@ -494,47 +498,45 @@ namespace lstm {
             mask({i}) = dist(gen) / (1.0 - prob);
         }
 
-        lstm_step_nn_t result = (*base)(var_tree, cell, output, input);
+        std::shared_ptr<autodiff::op_t> output = (*base)(var_tree, input);
 
         auto mask_var = graph.var(std::move(mask));
 
-        result.output = autodiff::emul(mask_var, result.output);
-
-        return result;
+        return autodiff::emul(mask_var, output);
     }
 
-    lstm_step_nn_t dyer_lstm_step_transcriber::operator()(
+    dyer_lstm_step_transcriber::dyer_lstm_step_transcriber()
+        : cell(nullptr), output(nullptr)
+    {}
+
+    std::shared_ptr<autodiff::op_t> dyer_lstm_step_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> cell,
-        std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> input) const
+        std::shared_ptr<autodiff::op_t> input)
     {
-        return make_dyer_lstm_step_nn(var_tree, cell, output, input);
+        lstm_step_nn_t nn = make_dyer_lstm_step_nn(var_tree, cell, output, input);
+
+        cell = nn.cell;
+        output = nn.output;
+
+        return output;
     }
 
-    lstm_step_nn_t lstm_multistep_transcriber::operator()(
+    std::shared_ptr<autodiff::op_t> lstm_multistep_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> cell,
-        std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> input) const
+        std::shared_ptr<autodiff::op_t> input)
     {
-        lstm_step_nn_t nn;
-
         for (int i = 0; i < steps.size(); ++i) {
-            nn = (*steps.at(i))(var_tree->children[i], cell, output, input);
-            output = nn.output;
-            cell = nn.cell;
-            input = nn.output;
+            input = (*steps.at(i))(var_tree->children[i], input);
         }
 
-        return nn;
+        return input;
     }
 
     transcriber::~transcriber()
     {}
 
     lstm_transcriber::lstm_transcriber(
-        std::shared_ptr<lstm_step_transcriber> step)
+        std::shared_ptr<step_transcriber> step)
         : step(step)
     {}
 
@@ -543,16 +545,10 @@ namespace lstm {
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::vector<std::shared_ptr<autodiff::op_t>> const& feat) const
     {
-        std::shared_ptr<autodiff::op_t> cell = nullptr;
-        std::shared_ptr<autodiff::op_t> output = nullptr;
-
         std::vector<std::shared_ptr<autodiff::op_t>> result;
 
         for (int i = 0; i < feat.size(); ++i) {
-            lstm_step_nn_t step_nn = (*step)(var_tree, cell, output, feat[i]);
-            cell = step_nn.cell;
-            output = step_nn.output;
-
+            std::shared_ptr<autodiff::op_t> output = (*step)(var_tree, feat[i]);
             result.push_back(output);
         }
 
