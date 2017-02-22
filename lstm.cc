@@ -447,7 +447,7 @@ namespace lstm {
         cell = nn.cell;
         output = nn.output;
 
-        return nn.output;
+        return output;
     }
 
     input_dropout_transcriber::input_dropout_transcriber(
