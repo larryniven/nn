@@ -56,6 +56,54 @@ namespace lstm_frame {
     }
 
     std::shared_ptr<lstm::transcriber>
+    make_transcriber(
+        int layer,
+        double dropout,
+        std::default_random_engine *gen)
+    {
+        std::shared_ptr<lstm::step_transcriber> step;
+
+        if (dropout != 0.0) {
+            assert(gen != nullptr);
+
+            step = std::make_shared<lstm::input_dropout_transcriber>(
+                lstm::input_dropout_transcriber {
+                    *gen, dropout,
+                    std::make_shared<lstm::dyer_lstm_step_transcriber>(
+                    lstm::dyer_lstm_step_transcriber{})
+                });
+        } else {
+            step = std::make_shared<lstm::dyer_lstm_step_transcriber>(
+                lstm::dyer_lstm_step_transcriber{});
+        }
+
+        lstm::layered_transcriber result;
+
+        for (int i = 0; i < layer; ++i) {
+            std::shared_ptr<lstm::transcriber> trans;
+
+            if (dropout != 0.0) {
+                trans = std::make_shared<lstm::lstm_transcriber>(
+                    lstm::lstm_transcriber {
+                        std::make_shared<lstm::output_dropout_transcriber>(
+                        lstm::output_dropout_transcriber {
+                            *gen, dropout, step })
+                    });
+            } else {
+                trans = std::make_shared<lstm::lstm_transcriber>(
+                    lstm::lstm_transcriber { step });
+            }
+
+            trans = std::make_shared<lstm::bi_transcriber>(
+                lstm::bi_transcriber { trans });
+
+            result.layer.push_back(trans);
+        }
+
+        return std::make_shared<lstm::layered_transcriber>(result);
+    }
+
+    std::shared_ptr<lstm::transcriber>
     make_pyramid_transcriber(
         int layer,
         double dropout,

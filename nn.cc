@@ -53,10 +53,10 @@ namespace nn {
         return la::dot(diff, diff);
     }
     
-    la::tensor<double> l2_loss::grad()
+    la::tensor<double> l2_loss::grad(double scale)
     {
-        la::tensor<double> g = la::mul(pred, 2);
-        la::axpy(g, -2, gold);
+        la::tensor<double> g = la::mul(pred, 2 * scale);
+        la::axpy(g, -2 * scale, gold);
 
         return g;
     }
