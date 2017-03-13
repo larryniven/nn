@@ -441,7 +441,7 @@ namespace tensor_tree {
         std::shared_ptr<vertex> grad,
         std::shared_ptr<vertex> first_moment,
         std::shared_ptr<vertex> second_moment,
-        int time, double alpha, double beta1, double beta2)
+        int& time, double alpha, double beta1, double beta2)
     {
         auto param_order = leaves_pre_order(param);
         auto grad_order = leaves_pre_order(grad);
@@ -716,6 +716,28 @@ namespace tensor_tree {
 
     void const_step_opt::load_opt_data(std::istream& is)
     {
+    }
+
+    const_step_momentum_opt::const_step_momentum_opt(std::shared_ptr<vertex> param,
+        double step_size, double momentum)
+        : param(param), step_size(step_size), momentum(momentum)
+    {
+        opt_data = shallow_copy(param);
+    }
+
+    void const_step_momentum_opt::update(std::shared_ptr<vertex> grad)
+    {
+        const_step_update_momentum(param, grad, opt_data, momentum, step_size);
+    }
+
+    void const_step_momentum_opt::save_opt_data(std::ostream& os) const
+    {
+        save_tensor(opt_data, os);
+    }
+
+    void const_step_momentum_opt::load_opt_data(std::istream& is)
+    {
+        load_tensor(opt_data, is);
     }
 
     adagrad_opt::adagrad_opt(std::shared_ptr<vertex> param,

@@ -76,7 +76,7 @@ namespace tensor_tree {
         std::shared_ptr<vertex> grad,
         std::shared_ptr<vertex> first_moment,
         std::shared_ptr<vertex> second_moment,
-        int time, double alpha, double beta1, double beta2);
+        int& time, double alpha, double beta1, double beta2);
 
     std::shared_ptr<vertex> make_var_tree(autodiff::computation_graph& g,
         std::shared_ptr<vertex> root);
@@ -110,6 +110,25 @@ namespace tensor_tree {
 
         const_step_opt(std::shared_ptr<vertex> param,
             double step_size);
+
+        virtual void update(std::shared_ptr<vertex> grad) override;
+
+        virtual void save_opt_data(std::ostream& os) const override;
+
+        virtual void load_opt_data(std::istream& is) override;
+
+    };
+
+    struct const_step_momentum_opt
+        : public optimizer {
+
+        std::shared_ptr<vertex> param;
+        double step_size;
+        double momentum;
+        std::shared_ptr<vertex> opt_data;
+
+        const_step_momentum_opt(std::shared_ptr<vertex> param,
+            double step_size, double momentum);
 
         virtual void update(std::shared_ptr<vertex> grad) override;
 
