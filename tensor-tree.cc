@@ -763,8 +763,8 @@ namespace tensor_tree {
     }
 
     rmsprop_opt::rmsprop_opt(std::shared_ptr<vertex> param,
-        double decay, double step_size)
-        : param(param), decay(decay), step_size(step_size)
+        double step_size, double decay)
+        : param(param), step_size(step_size), decay(decay)
     {
         accu_grad_sq = shallow_copy(param);
     }

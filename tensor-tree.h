@@ -160,12 +160,12 @@ namespace tensor_tree {
         : public optimizer {
 
         std::shared_ptr<vertex> param;
-        double decay;
         double step_size;
+        double decay;
         std::shared_ptr<vertex> accu_grad_sq;
 
         rmsprop_opt(std::shared_ptr<vertex> param,
-            double decay, double step_size);
+            double step_size, double decay);
 
         virtual void update(std::shared_ptr<vertex> grad) override;
 
