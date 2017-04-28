@@ -7,7 +7,7 @@ namespace lstm_frame {
 
     std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer)
     {
-        tensor_tree::vertex result { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex result { "nil" };
 
         lstm::multilayer_lstm_tensor_tree_factory factory {
             std::make_shared<lstm::bi_lstm_tensor_tree_factory>(
@@ -27,7 +27,7 @@ namespace lstm_frame {
 
     std::shared_ptr<tensor_tree::vertex> make_hypercolumn_tensor_tree(int layer)
     {
-        tensor_tree::vertex result { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex result { "nil" };
 
         lstm::multilayer_lstm_tensor_tree_factory factory {
             std::make_shared<lstm::bi_lstm_tensor_tree_factory>(
@@ -38,7 +38,7 @@ namespace lstm_frame {
             layer
         };
 
-        tensor_tree::vertex hypercolumn { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex hypercolumn { "nil" };
 
         hypercolumn.children.push_back(factory());
 

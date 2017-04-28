@@ -17,7 +17,7 @@ namespace nn {
 
     std::shared_ptr<tensor_tree::vertex> make_pred_tensor_tree()
     {
-        tensor_tree::vertex root { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex root { "nil" };
 
         root.children.push_back(tensor_tree::make_tensor("softmax weight"));
         root.children.push_back(tensor_tree::make_tensor("softmax bias"));

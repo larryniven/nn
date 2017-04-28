@@ -8,16 +8,8 @@
 
 namespace tensor_tree {
 
-    enum class tensor_t {
-        nil,
-        vector,
-        matrix,
-        tensor,
-        autodiff_var
-    };
-
     struct vertex {
-        tensor_t type;
+        std::string type;
 
         std::shared_ptr<void> data;
 
@@ -26,8 +18,6 @@ namespace tensor_tree {
         std::string name;
     };
 
-    std::shared_ptr<vertex> make_vector(std::string name = "");
-    std::shared_ptr<vertex> make_matrix(std::string name = "");
     std::shared_ptr<vertex> make_tensor(std::string name = "");
 
     template <class vec>
@@ -36,8 +26,6 @@ namespace tensor_tree {
         return *std::static_pointer_cast<vec>(t->data);
     }
 
-    la::vector<double>& get_vector(std::shared_ptr<vertex> p);
-    la::matrix<double>& get_matrix(std::shared_ptr<vertex> p);
     la::tensor<double>& get_tensor(std::shared_ptr<vertex> p);
     std::shared_ptr<autodiff::op_t> get_var(std::shared_ptr<vertex> p);
 

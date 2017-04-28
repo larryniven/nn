@@ -5,56 +5,30 @@
 #include <fstream>
 #include <exception>
 
+using namespace std::string_literals;
+
 namespace tensor_tree {
-
-    std::shared_ptr<vertex> make_vector(std::string name)
-    {
-        return std::make_shared<vertex>(vertex {tensor_t::vector, nullptr, {}, name});
-    }
-
-    std::shared_ptr<vertex> make_matrix(std::string name)
-    {
-        return std::make_shared<vertex>(vertex {tensor_t::matrix, nullptr, {}, name});
-    }
 
     std::shared_ptr<vertex> make_tensor(std::string name)
     {
-        return std::make_shared<vertex>(vertex {tensor_t::tensor, nullptr, {}, name});
-    }
-
-    la::vector<double>& get_vector(std::shared_ptr<vertex> p)
-    {
-        if (p->type == tensor_t::vector) {
-            return get_data<la::vector<double>>(p);
-        } else {
-            throw std::logic_error("expecting tensor_t::vector");
-        }
-    }
-
-    la::matrix<double>& get_matrix(std::shared_ptr<vertex> p)
-    {
-        if (p->type == tensor_t::matrix) {
-            return get_data<la::matrix<double>>(p);
-        } else {
-            throw std::logic_error("expecting tensor_t::matrix");
-        }
+        return std::make_shared<vertex>(vertex {"tensor"s, nullptr, {}, name});
     }
 
     la::tensor<double>& get_tensor(std::shared_ptr<vertex> p)
     {
-        if (p->type == tensor_t::tensor) {
+        if (p->type == "tensor") {
             return get_data<la::tensor<double>>(p);
         } else {
-            throw std::logic_error("expecting tensor_t::tensor");
+            throw std::logic_error("expecting tensor");
         }
     }
 
     std::shared_ptr<autodiff::op_t> get_var(std::shared_ptr<vertex> p)
     {
-        if (p->type == tensor_t::autodiff_var) {
+        if (p->type == "autodiff-var") {
             return std::static_pointer_cast<autodiff::op_t>(p->data);
         } else {
-            throw std::logic_error("expecting autodiff_var");
+            throw std::logic_error("expecting autodiff-var");
         }
     }
 
@@ -88,19 +62,9 @@ namespace tensor_tree {
         std::vector<std::shared_ptr<vertex>> order = leaves_pre_order(root);
 
         for (auto& v: order) {
-            if (v->type == tensor_t::vector) {
-                v->data = std::make_shared<la::vector<double>>(
-                    ebt::json::load<la::vector<double>>(is));
-                std::getline(is, line);
-            } else if (v->type == tensor_t::matrix) {
-                v->data = std::make_shared<la::matrix<double>>(
-                    ebt::json::load<la::matrix<double>>(is));
-                std::getline(is, line);
-            } else if (v->type == tensor_t::tensor) {
-                v->data = std::make_shared<la::tensor<double>>(
-                    ebt::json::load<la::tensor<double>>(is));
-                std::getline(is, line);
-            }
+            v->data = std::make_shared<la::tensor<double>>(
+                ebt::json::load<la::tensor<double>>(is));
+            std::getline(is, line);
         }
     }
 
@@ -116,16 +80,8 @@ namespace tensor_tree {
         std::vector<std::shared_ptr<vertex>> order = leaves_pre_order(root);
 
         for (auto& v: order) {
-            if (v->type == tensor_t::vector) {
-                ebt::json::dump(get_data<la::vector<double>>(v), os);
-                os << std::endl;
-            } else if (v->type == tensor_t::matrix) {
-                ebt::json::dump(get_data<la::matrix<double>>(v), os);
-                os << std::endl;
-            } else if (v->type == tensor_t::tensor) {
-                ebt::json::dump(get_data<la::tensor<double>>(v), os);
-                os << std::endl;
-            }
+            ebt::json::dump(get_data<la::tensor<double>>(v), os);
+            os << std::endl;
         }
     }
 
@@ -142,21 +98,10 @@ namespace tensor_tree {
         auto p2_order = leaves_pre_order(p2);
 
         for (int i = 0; i < p1_order.size(); ++i) {
-            if (p1_order[i]->type == tensor_t::vector) {
-                la::vector<double> v;
-                v.resize(get_data<la::vector<double>>(p2_order[i]).size());
-                p1_order[i]->data = std::make_shared<la::vector<double>>(std::move(v));
-            } else if (p1_order[i]->type == tensor_t::matrix) {
-                la::matrix<double> m;
-                auto& m2 = get_data<la::matrix<double>>(p2_order[i]);
-                m.resize(m2.rows(), m2.cols());
-                p1_order[i]->data = std::make_shared<la::matrix<double>>(std::move(m));
-            } else if (p1_order[i]->type == tensor_t::tensor) {
-                la::tensor<double> m;
-                auto& m2 = get_data<la::tensor<double>>(p2_order[i]);
-                la::resize_as(m, m2);
-                p1_order[i]->data = std::make_shared<la::tensor<double>>(std::move(m));
-            }
+            la::tensor<double> m;
+            auto& m2 = get_data<la::tensor<double>>(p2_order[i]);
+            la::resize_as(m, m2);
+            p1_order[i]->data = std::make_shared<la::tensor<double>>(std::move(m));
         }
     }
 
@@ -169,13 +114,7 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (t->type == tensor_t::vector) {
-                la::imul(get_data<la::vector<double>>(t), a);
-            } else if (t->type == tensor_t::matrix) {
-                la::imul(get_data<la::matrix<double>>(t), a);
-            } else if (t->type == tensor_t::tensor) {
-                la::imul(get_data<la::tensor<double>>(t), a);
-            }
+            la::imul(get_data<la::tensor<double>>(t), a);
         }
     }
 
@@ -189,16 +128,8 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (p1_order[i]->type == tensor_t::vector) {
-                la::iadd(get_data<la::vector<double>>(p1_order[i]),
-                    get_data<la::vector<double>>(p2_order[i]));
-            } else if (p1_order[i]->type == tensor_t::matrix) {
-                la::iadd(get_data<la::matrix<double>>(p1_order[i]),
-                    get_data<la::matrix<double>>(p2_order[i]));
-            } else if (p1_order[i]->type == tensor_t::tensor) {
-                la::iadd(get_data<la::tensor<double>>(p1_order[1]),
-                    get_data<la::tensor<double>>(p2_order[i]));
-            }
+            la::iadd(get_data<la::tensor<double>>(p1_order[1]),
+                get_data<la::tensor<double>>(p2_order[i]));
         }
     }
 
@@ -212,16 +143,8 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (p1_order[i]->type == tensor_t::vector) {
-                la::isub(get_data<la::vector<double>>(p1_order[i]),
-                    get_data<la::vector<double>>(p2_order[i]));
-            } else if (p1_order[i]->type == tensor_t::matrix) {
-                la::isub(get_data<la::matrix<double>>(p1_order[i]),
-                    get_data<la::matrix<double>>(p2_order[i]));
-            } else if (p1_order[i]->type == tensor_t::tensor) {
-                la::isub(get_data<la::tensor<double>>(p1_order[i]),
-                    get_data<la::tensor<double>>(p2_order[i]));
-            }
+            la::isub(get_data<la::tensor<double>>(p1_order[i]),
+                get_data<la::tensor<double>>(p2_order[i]));
         }
     }
 
@@ -234,13 +157,7 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (t->type == tensor_t::vector) {
-                la::zero(get_data<la::vector<double>>(t));
-            } else if (t->type == tensor_t::matrix) {
-                la::zero(get_data<la::matrix<double>>(t));
-            } else if (t->type == tensor_t::tensor) {
-                la::zero(get_data<la::tensor<double>>(t));
-            }
+            la::zero(get_data<la::tensor<double>>(t));
         }
     }
 
@@ -255,13 +172,7 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (order[i]->type == tensor_t::vector) {
-                result += std::pow(la::norm(get_vector(order[i])), 2);
-            } else if (order[i]->type == tensor_t::matrix) {
-                result += std::pow(la::norm(get_matrix(order[i])), 2);
-            } else if (order[i]->type == tensor_t::tensor) {
-                result += std::pow(la::norm(get_tensor(order[i])), 2);
-            }
+            result += std::pow(la::norm(get_tensor(order[i])), 2);
         }
 
         return std::sqrt(result);
@@ -276,18 +187,8 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (order[i]->type == tensor_t::vector) {
-                if (la::has_nan(get_vector(order[i]))) {
-                    return true;
-                }
-            } else if (order[i]->type == tensor_t::matrix) {
-                if (la::has_nan(get_matrix(order[i]))) {
-                    return true;
-                }
-            } else if (order[i]->type == tensor_t::tensor) {
-                if (la::has_nan(get_tensor(order[i]))) {
-                    return true;
-                }
+            if (la::has_nan(get_tensor(order[i]))) {
+                return true;
             }
         }
 
@@ -307,22 +208,10 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (grad_order[i]->type == tensor_t::vector) {
-                opt::const_step_update(
-                    get_data<la::vector<double>>(param_order[i]),
-                    get_data<la::vector<double>>(grad_order[i]),
-                    step_size);
-            } else if (grad_order[i]->type == tensor_t::matrix) {
-                opt::const_step_update(
-                    get_data<la::matrix<double>>(param_order[i]),
-                    get_data<la::matrix<double>>(grad_order[i]),
-                    step_size);
-            } else if (grad_order[i]->type == tensor_t::tensor) {
-                opt::const_step_update(
-                    get_data<la::tensor<double>>(param_order[i]),
-                    get_data<la::tensor<double>>(grad_order[i]),
-                    step_size);
-            }
+            opt::const_step_update(
+                get_data<la::tensor<double>>(param_order[i]),
+                get_data<la::tensor<double>>(grad_order[i]),
+                step_size);
         }
     }
 
@@ -341,25 +230,11 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (grad_order[i]->type == tensor_t::vector) {
-                opt::const_step_update_momentum(
-                    get_data<la::vector<double>>(param_order[i]),
-                    get_data<la::vector<double>>(grad_order[i]),
-                    get_data<la::vector<double>>(opt_data_order[i]),
-                    momentum, step_size);
-            } else if (grad_order[i]->type == tensor_t::matrix) {
-                opt::const_step_update_momentum(
-                    get_data<la::matrix<double>>(param_order[i]),
-                    get_data<la::matrix<double>>(grad_order[i]),
-                    get_data<la::matrix<double>>(opt_data_order[i]),
-                    momentum, step_size);
-            } else if (grad_order[i]->type == tensor_t::tensor) {
-                opt::const_step_update_momentum(
-                    get_data<la::tensor<double>>(param_order[i]),
-                    get_data<la::tensor<double>>(grad_order[i]),
-                    get_data<la::tensor<double>>(opt_data_order[i]),
-                    momentum, step_size);
-            }
+            opt::const_step_update_momentum(
+                get_data<la::tensor<double>>(param_order[i]),
+                get_data<la::tensor<double>>(grad_order[i]),
+                get_data<la::tensor<double>>(opt_data_order[i]),
+                momentum, step_size);
         }
     }
 
@@ -378,25 +253,11 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (grad_order[i]->type == tensor_t::vector) {
-                opt::adagrad_update(
-                    get_data<la::vector<double>>(param_order[i]),
-                    get_data<la::vector<double>>(grad_order[i]),
-                    get_data<la::vector<double>>(accu_grad_sq_order[i]),
-                    step_size);
-            } else if (grad_order[i]->type == tensor_t::matrix) {
-                opt::adagrad_update(
-                    get_data<la::matrix<double>>(param_order[i]),
-                    get_data<la::matrix<double>>(grad_order[i]),
-                    get_data<la::matrix<double>>(accu_grad_sq_order[i]),
-                    step_size);
-            } else if (grad_order[i]->type == tensor_t::tensor) {
-                opt::adagrad_update(
-                    get_data<la::tensor<double>>(param_order[i]),
-                    get_data<la::tensor<double>>(grad_order[i]),
-                    get_data<la::tensor<double>>(accu_grad_sq_order[i]),
-                    step_size);
-            }
+            opt::adagrad_update(
+                get_data<la::tensor<double>>(param_order[i]),
+                get_data<la::tensor<double>>(grad_order[i]),
+                get_data<la::tensor<double>>(accu_grad_sq_order[i]),
+                step_size);
         }
     }
 
@@ -415,25 +276,11 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (grad_order[i]->type == tensor_t::vector) {
-                opt::rmsprop_update(
-                    get_data<la::vector<double>>(param_order[i]),
-                    get_data<la::vector<double>>(grad_order[i]),
-                    get_data<la::vector<double>>(opt_data_order[i]),
-                    decay, step_size);
-            } else if (grad_order[i]->type == tensor_t::matrix) {
-                opt::rmsprop_update(
-                    get_data<la::matrix<double>>(param_order[i]),
-                    get_data<la::matrix<double>>(grad_order[i]),
-                    get_data<la::matrix<double>>(opt_data_order[i]),
-                    decay, step_size);
-            } else if (grad_order[i]->type == tensor_t::tensor) {
-                opt::rmsprop_update(
-                    get_data<la::tensor<double>>(param_order[i]),
-                    get_data<la::tensor<double>>(grad_order[i]),
-                    get_data<la::tensor<double>>(opt_data_order[i]),
-                    decay, step_size);
-            }
+            opt::rmsprop_update(
+                get_data<la::tensor<double>>(param_order[i]),
+                get_data<la::tensor<double>>(grad_order[i]),
+                get_data<la::tensor<double>>(opt_data_order[i]),
+                decay, step_size);
         }
     }
 
@@ -457,28 +304,12 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (grad_order[i]->type == tensor_t::vector) {
-                opt::adam_update(
-                    get_data<la::vector<double>>(param_order[i]),
-                    get_data<la::vector<double>>(grad_order[i]),
-                    get_data<la::vector<double>>(first_moment_order[i]),
-                    get_data<la::vector<double>>(second_moment_order[i]),
-                    time, alpha, beta1, beta2);
-            } else if (grad_order[i]->type == tensor_t::matrix) {
-                opt::adam_update(
-                    get_data<la::matrix<double>>(param_order[i]),
-                    get_data<la::matrix<double>>(grad_order[i]),
-                    get_data<la::matrix<double>>(first_moment_order[i]),
-                    get_data<la::matrix<double>>(second_moment_order[i]),
-                    time, alpha, beta1, beta2);
-            } else if (grad_order[i]->type == tensor_t::tensor) {
-                opt::adam_update(
-                    get_data<la::tensor<double>>(param_order[i]),
-                    get_data<la::tensor<double>>(grad_order[i]),
-                    get_data<la::tensor<double>>(first_moment_order[i]),
-                    get_data<la::tensor<double>>(second_moment_order[i]),
-                    time, alpha, beta1, beta2);
-            }
+            opt::adam_update(
+                get_data<la::tensor<double>>(param_order[i]),
+                get_data<la::tensor<double>>(grad_order[i]),
+                get_data<la::tensor<double>>(first_moment_order[i]),
+                get_data<la::tensor<double>>(second_moment_order[i]),
+                time, alpha, beta1, beta2);
         }
     }
 
@@ -504,12 +335,10 @@ namespace tensor_tree {
                     stack.push_back(std::make_tuple(u->children[i], false));
                 }
             } else {
-                std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {tensor_t::nil});
+                std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {"nil"});
 
-                if (u->type == tensor_t::vector
-                        || u->type == tensor_t::matrix
-                        || u->type == tensor_t::tensor) {
-                    k->type = tensor_t::autodiff_var;
+                if (u->type != "nil") {
+                    k->type = "autodiff-var";
                     auto v = g.var();
                     v->grad_needed = true;
                     v->output = u->data;
@@ -553,13 +382,9 @@ namespace tensor_tree {
                     stack.push_back(std::make_tuple(u->children[i], false));
                 }
             } else {
-                std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {tensor_t::nil});
+                std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {"nil"});
 
-                if (u->type == tensor_t::vector) {
-                    k->type = u->type;
-                } else if (u->type == tensor_t::matrix) {
-                    k->type = u->type;
-                } else if (u->type == tensor_t::tensor) {
+                if (u->type != "nil") {
                     k->type = u->type;
                 }
 
@@ -595,17 +420,9 @@ namespace tensor_tree {
                     stack.push_back(std::make_tuple(u->children[i], false));
                 }
             } else {
-                std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {tensor_t::nil});
+                std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {"nil"});
 
-                if (u->type == tensor_t::vector) {
-                    k->name = u->name;
-                    k->type = u->type;
-                    k->data = std::make_shared<la::vector<double>>(la::vector<double>(get_vector(u)));
-                } else if (u->type == tensor_t::matrix) {
-                    k->name = u->name;
-                    k->type = u->type;
-                    k->data = std::make_shared<la::matrix<double>>(la::matrix<double>(get_matrix(u)));
-                } else if (u->type == tensor_t::tensor) {
+                if (u->type != "nil") {
                     k->name = u->name;
                     k->type = u->type;
                     k->data = std::make_shared<la::tensor<double>>(la::tensor<double>(get_tensor(u)));
@@ -630,7 +447,7 @@ namespace tensor_tree {
         assert(result_order.size() == var_tree_order.size());
 
         for (int i = 0; i < result_order.size(); ++i) {
-            assert(var_tree_order[i]->type == tensor_t::autodiff_var);
+            assert(var_tree_order[i]->type == "autodiff-var");
 
             auto grad = get_var(var_tree_order[i])->grad;
 
@@ -669,18 +486,14 @@ namespace tensor_tree {
 
                 std::cout << "name: " << u->name;
 
-                if (u->type == tensor_t::vector) {
-                    std::cout << " type: vector";
-                } else if (u->type == tensor_t::matrix) {
-                    std::cout << " type: matrix";
-                } else if (u->type == tensor_t::tensor) {
+                if (u->type == "tensor") {
                     std::cout << " type: tensor";
-                } else if (u->type == tensor_t::autodiff_var) {
+                } else if (u->type == "autodiff-var") {
                     std::cout << " type: autodiff var";
                     if (get_var(u)->graph != nullptr) {
                         std::cout << " has graph";
                     }
-                } else if (u->type == tensor_t::nil) {
+                } else if (u->type == "nil") {
                     std::cout << " type: nil";
                 }
 

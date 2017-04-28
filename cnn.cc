@@ -4,10 +4,10 @@ namespace cnn {
 
     std::shared_ptr<tensor_tree::vertex> make_cnn_tensor_tree(int layer)
     {
-        tensor_tree::vertex root { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex root { "nil" };
     
         for (int i = 0; i < layer; ++i) {
-            tensor_tree::vertex conv { tensor_tree::tensor_t::nil };
+            tensor_tree::vertex conv { "nil" };
             conv.children.push_back(tensor_tree::make_tensor("conv weight"));
             conv.children.push_back(tensor_tree::make_tensor("conv bias"));
             root.children.push_back(std::make_shared<tensor_tree::vertex>(conv));
@@ -18,9 +18,9 @@ namespace cnn {
 
     std::shared_ptr<tensor_tree::vertex> make_densenet_tensor_tree(int layer)
     {
-        tensor_tree::vertex root { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex root { "nil" };
     
-        tensor_tree::vertex conv { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex conv { "nil" };
         for (int i = 0; i < layer; ++i) {
             for (int j = 0; j < i + 1; ++j) {
                 conv.children.push_back(tensor_tree::make_tensor("conv"));

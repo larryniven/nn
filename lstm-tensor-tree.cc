@@ -7,7 +7,7 @@ namespace lstm {
 
     std::shared_ptr<tensor_tree::vertex> lstm_tensor_tree_factory::operator()() const
     {
-        tensor_tree::vertex root { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex root { "nil" };
 
         // 0
         root.children.push_back(tensor_tree::make_tensor("input -> hidden"));
@@ -37,7 +37,7 @@ namespace lstm {
 
     std::shared_ptr<tensor_tree::vertex> dyer_lstm_tensor_tree_factory::operator()() const
     {
-        tensor_tree::vertex root { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex root { "nil" };
 
         // 0
         root.children.push_back(tensor_tree::make_tensor("input -> hidden"));
@@ -66,7 +66,7 @@ namespace lstm {
 
     std::shared_ptr<tensor_tree::vertex> multilayer_lstm_tensor_tree_factory::operator()() const
     {
-        tensor_tree::vertex root { tensor_tree::tensor_t::nil };
+        tensor_tree::vertex root { "nil" };
 
         for (int i = 0; i < layer; ++i) {
             root.children.push_back((*base_fac)());
