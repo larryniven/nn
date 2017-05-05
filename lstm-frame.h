@@ -24,12 +24,6 @@ namespace lstm_frame {
         double dropout,
         std::default_random_engine *gen);
 
-    std::shared_ptr<lstm::transcriber>
-    make_hypercolumn_transcriber(
-        int layer,
-        double dropout,
-        std::default_random_engine *gen);
-
 }
 
 #endif

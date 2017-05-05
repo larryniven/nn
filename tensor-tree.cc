@@ -128,7 +128,7 @@ namespace tensor_tree {
                 continue;
             }
 
-            la::iadd(get_data<la::tensor<double>>(p1_order[1]),
+            la::iadd(get_data<la::tensor<double>>(p1_order[i]),
                 get_data<la::tensor<double>>(p2_order[i]));
         }
     }
@@ -498,7 +498,7 @@ namespace tensor_tree {
                 }
 
                 if (u->data != nullptr) {
-                    std::cout << " has data";
+                    std::cout << " sizes: "<< get_tensor(u).sizes();
                 } else {
                     std::cout << " no data";
                 }

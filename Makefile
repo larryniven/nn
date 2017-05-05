@@ -17,7 +17,7 @@ clean:
 libnn.a: $(obj)
 	$(AR) rcs $@ $^
 
-libnngpu.a: $(obj) tensor-tree-gpu.o
+libnngpu.a: $(obj) tensor-tree-gpu.o nn-gpu.o
 	$(AR) rcs $@ $^
 
 nn.o: nn.h
@@ -31,3 +31,6 @@ tensor-tree.o: tensor-tree.h
 
 tensor-tree-gpu.o: tensor-tree-gpu.cu
 	nvcc $(NVCCFLAGS) -c tensor-tree-gpu.cu
+
+nn-gpu.o: nn-gpu.cu
+	nvcc $(NVCCFLAGS) -c nn-gpu.cu

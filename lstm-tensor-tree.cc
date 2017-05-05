@@ -95,7 +95,7 @@ namespace lstm {
 
     std::shared_ptr<tensor_tree::vertex> bi_lstm_tensor_tree_factory::operator()() const
     {
-        tensor_tree::vertex root;
+        tensor_tree::vertex root { "nil" };
 
         root.children.push_back((*base_fac)());
         root.children.push_back((*base_fac)());
