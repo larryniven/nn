@@ -123,6 +123,12 @@ namespace lstm {
         virtual ~transcriber();
 
         virtual
+        std::vector<std::shared_ptr<autodiff::op_t>>
+        operator()(
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::vector<std::shared_ptr<autodiff::op_t>> const& feat);
+
+        virtual
         std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
             std::vector<std::shared_ptr<autodiff::op_t>>>
         operator()(
@@ -137,6 +143,8 @@ namespace lstm {
         std::shared_ptr<step_transcriber> step;
 
         lstm_transcriber(std::shared_ptr<step_transcriber> step);
+
+        using transcriber::operator();
 
         virtual
         std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
@@ -155,6 +163,8 @@ namespace lstm {
 
         bi_transcriber(std::shared_ptr<transcriber> base);
 
+        using transcriber::operator();
+
         virtual
         std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
             std::vector<std::shared_ptr<autodiff::op_t>>>
@@ -168,6 +178,8 @@ namespace lstm {
         : public transcriber {
 
         std::vector<std::shared_ptr<transcriber>> layer;
+
+        using transcriber::operator();
 
         virtual
         std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
@@ -185,6 +197,8 @@ namespace lstm {
         std::shared_ptr<transcriber> base;
 
         logsoftmax_transcriber(std::shared_ptr<transcriber> base);
+
+        using transcriber::operator();
 
         virtual
         std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
@@ -204,6 +218,8 @@ namespace lstm {
         std::shared_ptr<transcriber> base;
 
         subsampled_transcriber(int freq, int shift, std::shared_ptr<transcriber> base);
+
+        using transcriber::operator();
 
         virtual
         std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,

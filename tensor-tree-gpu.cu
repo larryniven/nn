@@ -33,8 +33,8 @@ namespace tensor_tree {
                 }
 
                 if (t->type == "gpu-tensor") {
-                    t->type = "tensor";
                     t->data = std::make_shared<la::tensor<double>>(la::gpu::to_host(get_gpu_tensor(t)));
+                    t->type = "tensor";
                 }
             }
         }

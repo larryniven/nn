@@ -229,6 +229,21 @@ namespace lstm {
     transcriber::~transcriber()
     {}
 
+    std::vector<std::shared_ptr<autodiff::op_t>>
+    transcriber::operator()(
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::vector<std::shared_ptr<autodiff::op_t>> const& feat)
+    {
+        std::vector<std::shared_ptr<autodiff::op_t>> mask;
+        mask.resize(feat.size(), nullptr);
+
+        std::vector<std::shared_ptr<autodiff::op_t>> result;
+        std::vector<std::shared_ptr<autodiff::op_t>> o_mask;
+        std::tie(result, o_mask) = (*this)(var_tree, feat, mask);
+
+        return result;
+    }
+
     lstm_transcriber::lstm_transcriber(
         std::shared_ptr<step_transcriber> step)
         : step(step)
