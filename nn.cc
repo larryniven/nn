@@ -25,38 +25,38 @@ namespace nn {
         return std::make_shared<tensor_tree::vertex>(root);
     }
 
-    log_loss::log_loss(la::tensor_like<double> const& gold, la::tensor_like<double> const& pred)
+    log_loss::log_loss(la::cpu::tensor_like<double> const& gold, la::cpu::tensor_like<double> const& pred)
         : gold(gold), pred(pred)
     {}
     
     double log_loss::loss()
     {
-        return -la::dot(gold, pred);
+        return -la::cpu::dot(gold, pred);
     }
     
-    la::tensor<double> log_loss::grad(double scale)
+    la::cpu::tensor<double> log_loss::grad(double scale)
     {
-        return la::mul(gold, -scale);
+        return la::cpu::mul(gold, -scale);
     }
 
-    l2_loss::l2_loss(la::tensor_like<double> const& gold, la::tensor_like<double> const& pred)
+    l2_loss::l2_loss(la::cpu::tensor_like<double> const& gold, la::cpu::tensor_like<double> const& pred)
         : gold(gold), pred(pred)
     {}
     
     double l2_loss::loss()
     {
-        la::tensor<double> diff;
+        la::cpu::tensor<double> diff;
         diff.resize(gold.sizes());
-        la::copy(diff, gold);
-        la::isub(diff, pred);
+        la::cpu::copy(diff, gold);
+        la::cpu::isub(diff, pred);
 
-        return la::dot(diff, diff);
+        return la::cpu::dot(diff, diff);
     }
     
-    la::tensor<double> l2_loss::grad(double scale)
+    la::cpu::tensor<double> l2_loss::grad(double scale)
     {
-        la::tensor<double> g = la::mul(pred, 2 * scale);
-        la::axpy(g, -2 * scale, gold);
+        la::cpu::tensor<double> g = la::cpu::mul(pred, 2 * scale);
+        la::cpu::axpy(g, -2 * scale, gold);
 
         return g;
     }

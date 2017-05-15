@@ -17,29 +17,29 @@ namespace nn {
 
     struct log_loss {
     
-        la::tensor_like<double> const& gold;
-        la::tensor_like<double> const& pred;
+        la::cpu::tensor_like<double> const& gold;
+        la::cpu::tensor_like<double> const& pred;
     
-        log_loss(la::tensor_like<double> const& gold,
-            la::tensor_like<double> const& pred);
+        log_loss(la::cpu::tensor_like<double> const& gold,
+            la::cpu::tensor_like<double> const& pred);
     
         double loss();
     
-        la::tensor<double> grad(double scale=1);
+        la::cpu::tensor<double> grad(double scale=1);
     
     };
 
     struct l2_loss {
 
-        la::tensor_like<double> const& gold;
-        la::tensor_like<double> const& pred;
+        la::cpu::tensor_like<double> const& gold;
+        la::cpu::tensor_like<double> const& pred;
     
-        l2_loss(la::tensor_like<double> const& gold,
-            la::tensor_like<double> const& pred);
+        l2_loss(la::cpu::tensor_like<double> const& gold,
+            la::cpu::tensor_like<double> const& pred);
     
         double loss();
     
-        la::tensor<double> grad(double scale=1);
+        la::cpu::tensor<double> grad(double scale=1);
     
     };
 

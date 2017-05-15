@@ -25,77 +25,45 @@ namespace lstm_frame {
         return std::make_shared<tensor_tree::vertex>(result);
     }
 
-    std::shared_ptr<tensor_tree::vertex> make_hypercolumn_tensor_tree(int layer)
-    {
-        tensor_tree::vertex result { "nil" };
-
-        lstm::multilayer_lstm_tensor_tree_factory factory {
-            std::make_shared<lstm::bi_lstm_tensor_tree_factory>(
-            lstm::bi_lstm_tensor_tree_factory {
-                std::make_shared<lstm::dyer_lstm_tensor_tree_factory>(
-                    lstm::dyer_lstm_tensor_tree_factory{})
-            }),
-            layer
-        };
-
-        tensor_tree::vertex hypercolumn { "nil" };
-
-        hypercolumn.children.push_back(factory());
-
-        for (int i = 0; i < layer + 1; ++i) {
-            hypercolumn.children.push_back(tensor_tree::make_tensor("hypercolumn weight"));
-        }
-        hypercolumn.children.push_back(tensor_tree::make_tensor("hypercolumn bias"));
-
-        result.children.push_back(std::make_shared<tensor_tree::vertex>(hypercolumn));
-
-        result.children.push_back(tensor_tree::make_tensor("softmax weight"));
-        result.children.push_back(tensor_tree::make_tensor("softmax bias"));
-
-        return std::make_shared<tensor_tree::vertex>(result);
-    }
-
     std::shared_ptr<lstm::transcriber>
     make_transcriber(
         int layer,
         double dropout,
         std::default_random_engine *gen)
     {
-        std::shared_ptr<lstm::step_transcriber> step;
-
-        if (dropout != 0.0) {
-            assert(gen != nullptr);
-
-            step = std::make_shared<lstm::input_dropout_transcriber>(
-                lstm::input_dropout_transcriber {
-                    *gen, dropout,
-                    std::make_shared<lstm::dyer_lstm_step_transcriber>(
-                    lstm::dyer_lstm_step_transcriber{})
-                });
-        } else {
-            step = std::make_shared<lstm::dyer_lstm_step_transcriber>(
+        std::shared_ptr<lstm::step_transcriber> step
+            = std::make_shared<lstm::dyer_lstm_step_transcriber>(
                 lstm::dyer_lstm_step_transcriber{});
-        }
 
         lstm::layered_transcriber result;
 
         for (int i = 0; i < layer; ++i) {
-            std::shared_ptr<lstm::transcriber> trans;
+            std::shared_ptr<lstm::transcriber> f_trans;
+            std::shared_ptr<lstm::transcriber> b_trans;
 
             if (dropout != 0.0) {
-                trans = std::make_shared<lstm::lstm_transcriber>(
-                    lstm::lstm_transcriber {
-                        std::make_shared<lstm::output_dropout_transcriber>(
-                        lstm::output_dropout_transcriber {
-                            *gen, dropout, step })
-                    });
-            } else {
-                trans = std::make_shared<lstm::lstm_transcriber>(
+                f_trans = std::make_shared<lstm::lstm_transcriber>(
                     lstm::lstm_transcriber { step });
+                f_trans = std::make_shared<lstm::input_dropout_transcriber>(
+                    lstm::input_dropout_transcriber { f_trans, dropout, *gen });
+                f_trans = std::make_shared<lstm::output_dropout_transcriber>(
+                    lstm::output_dropout_transcriber { f_trans, dropout, *gen });
+
+                b_trans = std::make_shared<lstm::lstm_transcriber>(
+                    lstm::lstm_transcriber { step, true });
+                b_trans = std::make_shared<lstm::input_dropout_transcriber>(
+                    lstm::input_dropout_transcriber { b_trans, dropout, *gen });
+                b_trans = std::make_shared<lstm::output_dropout_transcriber>(
+                    lstm::output_dropout_transcriber { b_trans, dropout, *gen });
+            } else {
+                f_trans = std::make_shared<lstm::lstm_transcriber>(
+                    lstm::lstm_transcriber { step });
+                b_trans = std::make_shared<lstm::lstm_transcriber>(
+                    lstm::lstm_transcriber { step, true });
             }
 
-            trans = std::make_shared<lstm::bi_transcriber>(
-                lstm::bi_transcriber { trans });
+            std::shared_ptr<lstm::transcriber> trans = std::make_shared<lstm::bi_transcriber>(
+                lstm::bi_transcriber { f_trans, b_trans });
 
             result.layer.push_back(trans);
         }
@@ -109,41 +77,39 @@ namespace lstm_frame {
         double dropout,
         std::default_random_engine *gen)
     {
-        std::shared_ptr<lstm::step_transcriber> step;
-
-        if (dropout != 0.0) {
-            assert(gen != nullptr);
-
-            step = std::make_shared<lstm::input_dropout_transcriber>(
-                lstm::input_dropout_transcriber {
-                    *gen, dropout,
-                    std::make_shared<lstm::dyer_lstm_step_transcriber>(
-                    lstm::dyer_lstm_step_transcriber{})
-                });
-        } else {
-            step = std::make_shared<lstm::dyer_lstm_step_transcriber>(
+        std::shared_ptr<lstm::step_transcriber> step
+            = std::make_shared<lstm::dyer_lstm_step_transcriber>(
                 lstm::dyer_lstm_step_transcriber{});
-        }
 
         lstm::layered_transcriber result;
 
         for (int i = 0; i < layer; ++i) {
-            std::shared_ptr<lstm::transcriber> trans;
+            std::shared_ptr<lstm::transcriber> f_trans;
+            std::shared_ptr<lstm::transcriber> b_trans;
 
             if (dropout != 0.0) {
-                trans = std::make_shared<lstm::lstm_transcriber>(
-                    lstm::lstm_transcriber {
-                        std::make_shared<lstm::output_dropout_transcriber>(
-                        lstm::output_dropout_transcriber {
-                            *gen, dropout, step })
-                    });
-            } else {
-                trans = std::make_shared<lstm::lstm_transcriber>(
+                f_trans = std::make_shared<lstm::lstm_transcriber>(
                     lstm::lstm_transcriber { step });
+                f_trans = std::make_shared<lstm::input_dropout_transcriber>(
+                    lstm::input_dropout_transcriber { f_trans, dropout, *gen });
+                f_trans = std::make_shared<lstm::output_dropout_transcriber>(
+                    lstm::output_dropout_transcriber { f_trans, dropout, *gen });
+
+                b_trans = std::make_shared<lstm::lstm_transcriber>(
+                    lstm::lstm_transcriber { step, true });
+                b_trans = std::make_shared<lstm::input_dropout_transcriber>(
+                    lstm::input_dropout_transcriber { b_trans, dropout, *gen });
+                b_trans = std::make_shared<lstm::output_dropout_transcriber>(
+                    lstm::output_dropout_transcriber { b_trans, dropout, *gen });
+            } else {
+                f_trans = std::make_shared<lstm::lstm_transcriber>(
+                    lstm::lstm_transcriber { step });
+                b_trans = std::make_shared<lstm::lstm_transcriber>(
+                    lstm::lstm_transcriber { step, true });
             }
 
-            trans = std::make_shared<lstm::bi_transcriber>(
-                lstm::bi_transcriber { trans });
+            std::shared_ptr<lstm::transcriber> trans = std::make_shared<lstm::bi_transcriber>(
+                lstm::bi_transcriber { f_trans, b_trans });
 
             if (i != layer - 1) {
                 trans = std::make_shared<lstm::subsampled_transcriber>(

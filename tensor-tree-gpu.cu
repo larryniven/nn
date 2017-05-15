@@ -33,7 +33,7 @@ namespace tensor_tree {
                 }
 
                 if (t->type == "gpu-tensor") {
-                    t->data = std::make_shared<la::tensor<double>>(la::gpu::to_host(get_gpu_tensor(t)));
+                    t->data = std::make_shared<la::cpu::tensor<double>>(la::gpu::to_host(get_gpu_tensor(t)));
                     t->type = "tensor";
                 }
             }
@@ -55,10 +55,10 @@ namespace tensor_tree {
 
             for (int i = 0; i < p1_order.size(); ++i) {
                 if (p1_order[i]->type == "tensor") {
-                    la::tensor<double> m;
+                    la::cpu::tensor<double> m;
                     auto& m2 = get_tensor(p2_order[i]);
-                    la::resize_as(m, m2);
-                    p1_order[i]->data = std::make_shared<la::tensor<double>>(std::move(m));
+                    la::cpu::resize_as(m, m2);
+                    p1_order[i]->data = std::make_shared<la::cpu::tensor<double>>(std::move(m));
                 } else if (p1_order[i]->type == "gpu-tensor") {
                     la::gpu::tensor<double> m;
                     auto& m2 = get_gpu_tensor(p2_order[i]);
@@ -78,7 +78,7 @@ namespace tensor_tree {
                 }
 
                 if (t->type == "tensor") {
-                    la::imul(get_tensor(t), a);
+                    la::cpu::imul(get_tensor(t), a);
                 } else if (t->type == "gpu-tensor") {
                     la::gpu::imul(get_gpu_tensor(t), a);
                 }
@@ -96,7 +96,7 @@ namespace tensor_tree {
                 }
 
                 if (p1_order[i]->type == "tensor") {
-                    la::iadd(get_tensor(p1_order[1]), get_tensor(p2_order[i]));
+                    la::cpu::iadd(get_tensor(p1_order[1]), get_tensor(p2_order[i]));
                 } else if (p1_order[i]->type == "gpu-tensor") {
                     la::gpu::iadd(get_gpu_tensor(p1_order[1]), get_gpu_tensor(p2_order[i]));
                 }
@@ -114,7 +114,7 @@ namespace tensor_tree {
                 }
 
                 if (p1_order[i]->type == "tensor") {
-                    la::isub(get_tensor(p1_order[i]), get_tensor(p2_order[i]));
+                    la::cpu::isub(get_tensor(p1_order[i]), get_tensor(p2_order[i]));
                 } else if (p1_order[i]->type == "gpu-tensor") {
                     la::gpu::isub(get_gpu_tensor(p1_order[i]), get_gpu_tensor(p2_order[i]));
                 }
@@ -131,7 +131,7 @@ namespace tensor_tree {
                 }
 
                 if (t->type == "tensor") {
-                    la::zero(get_tensor(t));
+                    la::cpu::zero(get_tensor(t));
                 } else if (t->type == "gpu-tensor") {
                     la::gpu::zero(get_gpu_tensor(t));
                 }
@@ -150,7 +150,7 @@ namespace tensor_tree {
                 }
 
                 if (order[i]->type == "tensor") {
-                    result += std::pow(la::norm(get_tensor(order[i])), 2);
+                    result += std::pow(la::cpu::norm(get_tensor(order[i])), 2);
                 } else if (order[i]->type == "gpu-tensor") {
                     result += std::pow(la::gpu::norm(get_gpu_tensor(order[i])), 2);
                 }
@@ -169,7 +169,7 @@ namespace tensor_tree {
                 }
 
                 if (order[i]->type == "tensor") {
-                    if (la::has_nan(get_tensor(order[i]))) {
+                    if (la::cpu::has_nan(get_tensor(order[i]))) {
                         return true;
                     }
                 } else if (order[i]->type == "gpu-tensor") {

@@ -10,8 +10,6 @@ namespace lstm_frame {
 
     std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer);
 
-    std::shared_ptr<tensor_tree::vertex> make_hypercolumn_tensor_tree(int layer);
-
     std::shared_ptr<lstm::transcriber>
     make_transcriber(
         int layer,

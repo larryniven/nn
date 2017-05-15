@@ -3,7 +3,7 @@
 
 #include <vector>
 #include <memory>
-#include "la/la.h"
+#include "la/la-cpu.h"
 #include "autodiff/autodiff.h"
 
 namespace tensor_tree {
@@ -26,7 +26,7 @@ namespace tensor_tree {
         return *std::static_pointer_cast<vec>(t->data);
     }
 
-    la::tensor<double>& get_tensor(std::shared_ptr<vertex> p);
+    la::cpu::tensor<double>& get_tensor(std::shared_ptr<vertex> p);
     std::shared_ptr<autodiff::op_t> get_var(std::shared_ptr<vertex> p);
 
     std::vector<std::shared_ptr<vertex>> leaves_pre_order(std::shared_ptr<vertex> root);

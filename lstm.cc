@@ -68,31 +68,33 @@ namespace lstm {
     }
 
     lstm_step_nn_t make_dyer_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> prev_cell,
+        std::shared_ptr<autodiff::op_t> prev_output,
+        std::shared_ptr<autodiff::op_t> input_h,
+        std::shared_ptr<autodiff::op_t> input_i,
+        std::shared_ptr<autodiff::op_t> input_o,
         std::shared_ptr<autodiff::op_t> cell,
         std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> input,
         std::shared_ptr<autodiff::op_t> cell_mask)
     {
-        lstm_step_nn_t result;
-
-        result.input = nullptr;
-
         std::vector<std::shared_ptr<autodiff::op_t>> h_comp;
         std::vector<std::shared_ptr<autodiff::op_t>> input_gate_comp;
 
-        if (input != nullptr) {
-            result.input = autodiff::mul(input, get_var(var_tree->children[0]));
-            h_comp.push_back(result.input);
-            input_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[3])));
+        if (input_h != nullptr) {
+            h_comp.push_back(input_h);
         }
 
-        if (output != nullptr) {
-            h_comp.push_back(autodiff::mul(output, get_var(var_tree->children[1])));
-            input_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[4])));
+        if (input_i != nullptr) {
+            input_gate_comp.push_back(input_i);
         }
 
-        if (cell != nullptr) {
-            input_gate_comp.push_back(autodiff::mul(cell, get_var(var_tree->children[5])));
+        if (prev_output != nullptr) {
+            h_comp.push_back(autodiff::mul(prev_output, get_var(var_tree->children[1])));
+            input_gate_comp.push_back(autodiff::mul(prev_output, get_var(var_tree->children[4])));
+        }
+
+        if (prev_cell != nullptr) {
+            input_gate_comp.push_back(autodiff::mul(prev_cell, get_var(var_tree->children[5])));
         }
 
         assert(h_comp.size() > 0);
@@ -102,49 +104,65 @@ namespace lstm {
         assert(input_gate_comp.size() > 0);
         input_gate_comp.push_back(autodiff::rep_row_to(get_var(var_tree->children[6]),
             input_gate_comp.back()));
-        result.input_gate = autodiff::logistic(autodiff::add(input_gate_comp));
+        auto input_gate = autodiff::logistic(autodiff::add(input_gate_comp));
 
-        if (cell != nullptr) {
-            auto one = autodiff::resize_as(result.input_gate, 1);
+        std::shared_ptr<autodiff::op_t> forget_gate = nullptr;
+        std::shared_ptr<autodiff::op_t> cell_tmp = nullptr;
 
-            result.forget_gate = autodiff::sub(one, result.input_gate);
+        if (prev_cell != nullptr) {
+            auto one = autodiff::resize_as(input_gate, 1);
+            one->grad_needed = false;
 
-            result.cell = autodiff::add(
-                autodiff::emul(result.forget_gate, cell),
-                autodiff::emul(result.input_gate, h));
+            forget_gate = autodiff::sub(one, input_gate);
+
+            cell_tmp = autodiff::add(
+                autodiff::emul(forget_gate, prev_cell),
+                autodiff::emul(input_gate, h));
         } else {
-            result.cell = autodiff::emul(result.input_gate, h);
+            cell_tmp = autodiff::emul(input_gate, h);
         }
 
         if (cell_mask != nullptr) {
-            result.cell = autodiff::emul(result.cell, autodiff::rep_col_to(cell_mask, result.cell));
+            cell_tmp = autodiff::emul(cell_tmp, autodiff::rep_col_to(cell_mask, cell_tmp));
         }
 
+        autodiff::add(cell, std::vector<std::shared_ptr<autodiff::op_t>>{cell_tmp});
+
         std::vector<std::shared_ptr<autodiff::op_t>> output_gate_comp {
-            autodiff::mul(result.cell, get_var(var_tree->children[9])) };
+            autodiff::mul(cell, get_var(var_tree->children[9])) };
 
         output_gate_comp.push_back(autodiff::rep_row_to(get_var(var_tree->children[10]),
             output_gate_comp.back()));
 
-        if (input != nullptr) {
-            output_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[7])));
+        if (input_o != nullptr) {
+            output_gate_comp.push_back(input_o);
         }
 
-        if (output != nullptr) {
-            output_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[8])));
+        if (prev_output != nullptr) {
+            output_gate_comp.push_back(autodiff::mul(prev_output, get_var(var_tree->children[8])));
         }
 
-        result.output_gate = autodiff::logistic(autodiff::add(output_gate_comp));
+        auto output_gate = autodiff::logistic(autodiff::add(output_gate_comp));
 
-        result.output = autodiff::emul(result.output_gate,
-            autodiff::tanh(result.cell));
+        autodiff::emul(output, output_gate, autodiff::tanh(cell));
+
+        lstm_step_nn_t result;
+
+        result.input_gate = input_gate;
+        result.output_gate = output_gate;
+        result.forget_gate = forget_gate;
+        result.cell = cell;
+        result.output = output;
 
         return result;
     }
 
+    // step transcriber
+
     step_transcriber::~step_transcriber()
     {}
 
+#if 0
     lstm_step_transcriber::lstm_step_transcriber()
         : cell(nullptr), output(nullptr)
     {}
@@ -162,172 +180,204 @@ namespace lstm {
 
         return output;
     }
+#endif
 
-    input_dropout_transcriber::input_dropout_transcriber(
-        std::default_random_engine& gen, double prob,
-        std::shared_ptr<step_transcriber> base)
-        : gen(gen), prob(prob), base(base)
-    {}
-
-    std::shared_ptr<autodiff::op_t> input_dropout_transcriber::operator()(
+    lstm_step_nn_t dyer_lstm_step_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> input,
+        std::shared_ptr<autodiff::op_t> prev_cell,
+        std::shared_ptr<autodiff::op_t> prev_output,
+        std::shared_ptr<autodiff::op_t> input_h,
+        std::shared_ptr<autodiff::op_t> input_i,
+        std::shared_ptr<autodiff::op_t> input_o,
+        std::shared_ptr<autodiff::op_t> cell,
+        std::shared_ptr<autodiff::op_t> output,
         std::shared_ptr<autodiff::op_t> cell_mask)
     {
-        auto mask = autodiff::dropout_mask(input, prob, gen);
-
-        return (*base)(var_tree, autodiff::emul(mask, input), cell_mask);
+        return make_dyer_lstm_step_nn(var_tree, prev_cell, prev_output,
+            input_h, input_i, input_o, cell, output, cell_mask);
     }
 
-    output_dropout_transcriber::output_dropout_transcriber(
-        std::default_random_engine& gen, double prob,
-        std::shared_ptr<step_transcriber> base)
-        : gen(gen), prob(prob), base(base)
-    {}
-
-    std::shared_ptr<autodiff::op_t> output_dropout_transcriber::operator()(
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> input,
-        std::shared_ptr<autodiff::op_t> cell_mask)
+    std::vector<std::shared_ptr<autodiff::op_t>> split_rows(
+        std::shared_ptr<autodiff::op_t> t)
     {
-        std::shared_ptr<autodiff::op_t> output = (*base)(var_tree, input, cell_mask);
-
-        auto mask = autodiff::dropout_mask(output, prob, gen);
-
-        return autodiff::emul(mask, output);
-    }
-
-    dyer_lstm_step_transcriber::dyer_lstm_step_transcriber()
-        : cell(nullptr), output(nullptr)
-    {}
-
-    std::shared_ptr<autodiff::op_t> dyer_lstm_step_transcriber::operator()(
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> input,
-        std::shared_ptr<autodiff::op_t> cell_mask)
-    {
-        lstm_step_nn_t nn = make_dyer_lstm_step_nn(var_tree, cell, output, input, cell_mask);
-
-        cell = nn.cell;
-        output = nn.output;
-
-        return output;
-    }
-
-    std::shared_ptr<autodiff::op_t> lstm_multistep_transcriber::operator()(
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> input,
-        std::shared_ptr<autodiff::op_t> cell_mask)
-    {
-        for (int i = 0; i < steps.size(); ++i) {
-            input = (*steps.at(i))(var_tree->children[i], input, cell_mask);
-        }
-
-        return input;
-    }
-
-    transcriber::~transcriber()
-    {}
-
-    std::vector<std::shared_ptr<autodiff::op_t>>
-    transcriber::operator()(
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat)
-    {
-        std::vector<std::shared_ptr<autodiff::op_t>> mask;
-        mask.resize(feat.size(), nullptr);
-
+        auto& v = autodiff::get_output<la::tensor_like<double>>(t);
         std::vector<std::shared_ptr<autodiff::op_t>> result;
-        std::vector<std::shared_ptr<autodiff::op_t>> o_mask;
-        std::tie(result, o_mask) = (*this)(var_tree, feat, mask);
+
+        std::vector<unsigned int> sizes = v.sizes();
+        std::vector<unsigned int> new_sizes { sizes.begin() + 1, sizes.end() };
+        int new_vec_size = v.vec_size() / v.size(0);
+
+        for (int i = 0; i < v.size(0); ++i) {
+            result.push_back(autodiff::weak_var(t, new_vec_size * i, new_sizes));
+        }
 
         return result;
     }
 
-    lstm_transcriber::lstm_transcriber(
-        std::shared_ptr<step_transcriber> step)
-        : step(step)
+    // transcriber
+
+    transcriber::~transcriber()
     {}
 
-    std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
-        std::vector<std::shared_ptr<autodiff::op_t>>>
+    lstm_transcriber::lstm_transcriber(
+        std::shared_ptr<step_transcriber> step,
+        bool reverse)
+        : step(step), reverse(reverse)
+    {}
+
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
     lstm_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& mask) const
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
     {
-        std::vector<std::shared_ptr<autodiff::op_t>> result;
+        auto h = autodiff::mul(feat, tensor_tree::get_var(var_tree->children[0]));
 
-        for (int i = 0; i < feat.size(); ++i) {
-            std::shared_ptr<autodiff::op_t> output = (*step)(var_tree, feat[i], mask[i]);
-            result.push_back(output);
+        auto input_h = autodiff::add(h,
+            autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[2]), h));
+
+        auto input_h_vars = split_rows(input_h);
+
+        auto input_i = autodiff::add(autodiff::mul(feat, tensor_tree::get_var(var_tree->children[3])),
+            autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[6]), h));
+
+        auto input_i_vars = split_rows(input_i);
+
+        auto input_o = autodiff::add(autodiff::mul(feat, tensor_tree::get_var(var_tree->children[7])),
+            autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[10]), h));
+
+        auto input_o_vars = split_rows(input_o);
+
+        std::shared_ptr<autodiff::op_t> cell = autodiff::resize_as(input_h);
+        std::vector<std::shared_ptr<autodiff::op_t>> cell_vars = split_rows(cell);
+
+        auto output = autodiff::resize_as(input_h);
+        std::vector<std::shared_ptr<autodiff::op_t>> output_vars = split_rows(output);
+
+        std::vector<std::shared_ptr<autodiff::op_t>> mask_vars;
+        if (mask == nullptr) {
+            mask_vars.resize(output_vars.size(), nullptr);
+        } else {
+            mask_vars = split_rows(mask);
         }
 
-        return std::make_pair(result, mask);
+        auto& feat_t = autodiff::get_output<la::tensor_like<double>>(feat);
+
+        if (reverse) {
+            for (int i = feat_t.size(0) - 1; i >= 0; --i) {
+                if (i == feat_t.size(0) - 1) {
+                    (*step)(var_tree, nullptr, nullptr,
+                       input_h_vars[i], input_i_vars[i], input_o_vars[i],
+                       cell_vars[i], output_vars[i], mask_vars[i]);
+                } else {
+                    (*step)(var_tree, cell_vars[i+1], output_vars[i+1],
+                       input_h_vars[i], input_i_vars[i], input_o_vars[i],
+                       cell_vars[i], output_vars[i], mask_vars[i]);
+                }
+            }
+        } else {
+            for (int i = 0; i < feat_t.size(0); ++i) {
+                if (i == 0) {
+                    (*step)(var_tree, nullptr, nullptr,
+                       input_h_vars[i], input_i_vars[i], input_o_vars[i],
+                       cell_vars[i], output_vars[i], mask_vars[i]);
+                } else {
+                    (*step)(var_tree, cell_vars[i-1], output_vars[i-1],
+                       input_h_vars[i], input_i_vars[i], input_o_vars[i],
+                       cell_vars[i], output_vars[i], mask_vars[i]);
+                }
+            }
+        }
+
+        return std::make_pair(output, mask);
     }
 
-    bi_transcriber::bi_transcriber(std::shared_ptr<transcriber> base)
-        : base(base)
+    input_dropout_transcriber::input_dropout_transcriber(
+        std::shared_ptr<transcriber> base,
+        double prob,
+        std::default_random_engine& gen)
+        : base(base), prob(prob), gen(gen)
     {}
 
-    std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
-        std::vector<std::shared_ptr<autodiff::op_t>>>
-    bi_transcriber::operator()(
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
+    input_dropout_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& mask) const
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
     {
-        std::vector<std::shared_ptr<autodiff::op_t>> result;
+        auto d_mask = autodiff::dropout_mask(feat, prob, gen);
 
-        std::vector<std::shared_ptr<autodiff::op_t>> f = feat;
-        std::vector<std::shared_ptr<autodiff::op_t>> m = mask;
-
-        std::vector<std::shared_ptr<autodiff::op_t>> f_output_mask;
-        std::vector<std::shared_ptr<autodiff::op_t>> b_output_mask;
-
-        std::vector<std::shared_ptr<autodiff::op_t>> forward;
-        std::vector<std::shared_ptr<autodiff::op_t>> backward;
-
-        std::tie(forward, f_output_mask) = (*base)(var_tree->children[0], f, m);
-
-        std::reverse(f.begin(), f.end());
-        std::reverse(m.begin(), m.end());
-
-        std::tie(backward, b_output_mask) = (*base)(var_tree->children[1], f, m);
-
-        assert(f_output_mask.size() == b_output_mask.size());
-
-        std::reverse(backward.begin(), backward.end());
-
-        std::vector<std::vector<std::shared_ptr<autodiff::op_t>>> comps;
-
-        for (int i = 0; i < forward.size(); ++i) {
-            std::vector<std::shared_ptr<autodiff::op_t>> comp {
-                autodiff::mul(forward[i], get_var(var_tree->children[2])),
-                autodiff::mul(backward[i], get_var(var_tree->children[3])),
-            };
-            comps.push_back(comp);
-        }
-
-        auto output_bias = autodiff::rep_row_to(get_var(var_tree->children[4]), comps.back().back());
-
-        for (int i = 0; i < forward.size(); ++i) {
-            comps[i].push_back(output_bias);
-            result.push_back(autodiff::add(comps[i]));
-        }
-
-        return std::make_pair(result, f_output_mask);
+        return (*base)(var_tree, autodiff::emul(feat, d_mask), mask);
     }
 
-    std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
-        std::vector<std::shared_ptr<autodiff::op_t>>>
+    output_dropout_transcriber::output_dropout_transcriber(
+        std::shared_ptr<transcriber> base,
+        double prob,
+        std::default_random_engine& gen)
+        : base(base), prob(prob), gen(gen)
+    {}
+
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
+    output_dropout_transcriber::operator()(
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
+    {
+        std::shared_ptr<autodiff::op_t> output;
+        std::shared_ptr<autodiff::op_t> o_mask;
+
+        std::tie(output, o_mask) = (*base)(var_tree, feat, mask);
+
+        auto d_mask = autodiff::dropout_mask(output, prob, gen);
+
+        return std::make_pair(autodiff::emul(d_mask, output), o_mask);
+    }
+
+    bi_transcriber::bi_transcriber(std::shared_ptr<transcriber> f_base,
+        std::shared_ptr<transcriber> b_base)
+        : f_base(f_base), b_base(b_base)
+    {}
+
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
+    bi_transcriber::operator()(
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
+    {
+        std::shared_ptr<autodiff::op_t> f_mask;
+        std::shared_ptr<autodiff::op_t> f_output;
+        std::shared_ptr<autodiff::op_t> b_mask;
+        std::shared_ptr<autodiff::op_t> b_output;
+
+        std::tie(f_output, f_mask) = (*f_base)(var_tree->children[0], feat, mask);
+        std::tie(b_output, b_mask) = (*b_base)(var_tree->children[1], feat, mask);
+
+        auto h = autodiff::mul(f_output, tensor_tree::get_var(var_tree->children[2]));
+
+        auto result = autodiff::add(
+            std::vector<std::shared_ptr<autodiff::op_t>> {
+                h,
+                autodiff::mul(b_output, tensor_tree::get_var(var_tree->children[3])),
+                autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[4]), h)
+            }
+        );
+
+        return std::make_pair(result, f_mask);
+    }
+
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
     layered_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& mask) const
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
     {
-        std::vector<std::shared_ptr<autodiff::op_t>> output = feat;
-        std::vector<std::shared_ptr<autodiff::op_t>> o_mask = mask;
+        std::shared_ptr<autodiff::op_t> output = feat;
+        std::shared_ptr<autodiff::op_t> o_mask = mask;
 
         for (int i = 0; i < layer.size(); ++i) {
             std::tie(output, o_mask) = (*layer[i])(var_tree->children[i], output, o_mask);
@@ -341,15 +391,15 @@ namespace lstm {
         : base(base)
     {}
 
-    std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
-        std::vector<std::shared_ptr<autodiff::op_t>>>
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
     logsoftmax_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& mask) const
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
     {
-        std::vector<std::shared_ptr<autodiff::op_t>> output;
-        std::vector<std::shared_ptr<autodiff::op_t>> o_mask;
+        std::shared_ptr<autodiff::op_t> output;
+        std::shared_ptr<autodiff::op_t> o_mask;
 
         if (base == nullptr) {
             output = feat;
@@ -358,16 +408,12 @@ namespace lstm {
             std::tie(output, o_mask) = (*base)(var_tree->children[0], feat, mask);
         }
 
-        std::vector<std::shared_ptr<autodiff::op_t>> result;
+        auto h = autodiff::mul(output, tensor_tree::get_var(var_tree->children[1]));
 
-        for (int i = 0; i < output.size(); ++i) {
-            auto h = autodiff::mul(output[i], tensor_tree::get_var(var_tree->children[1]));
-            auto b = autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[2]), h);
-
-            result.push_back(autodiff::logsoftmax(
-                autodiff::add(std::vector<std::shared_ptr<autodiff::op_t>>{h, b})
-            ));
-        }
+        auto result = autodiff::logsoftmax(autodiff::add(
+            h,
+            autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[2]), h)
+        ));
 
         return std::make_pair(result, o_mask);
     }
@@ -377,28 +423,41 @@ namespace lstm {
         : freq(freq), shift(shift), base(base)
     {}
 
-    std::pair<std::vector<std::shared_ptr<autodiff::op_t>>,
-        std::vector<std::shared_ptr<autodiff::op_t>>>
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
     subsampled_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& feat,
-        std::vector<std::shared_ptr<autodiff::op_t>> const& mask) const
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
     {
-        std::vector<std::shared_ptr<autodiff::op_t>> result;
-        std::vector<std::shared_ptr<autodiff::op_t>> output;
-        std::vector<std::shared_ptr<autodiff::op_t>> o_mask;
+        std::shared_ptr<autodiff::op_t> output;
+        std::shared_ptr<autodiff::op_t> o_mask;
         std::tie(output, o_mask) = (*base)(var_tree, feat, mask);
 
+        std::vector<std::shared_ptr<autodiff::op_t>> output_vars = split_rows(output);
+        std::vector<std::shared_ptr<autodiff::op_t>> o_mask_vars;
+        if (o_mask != nullptr) {
+            o_mask_vars = split_rows(o_mask);
+        }
+
+        std::vector<std::shared_ptr<autodiff::op_t>> result;
         std::vector<std::shared_ptr<autodiff::op_t>> subsampled_mask;
 
-        for (int i = 0; i < output.size(); ++i) {
+        for (int i = 0; i < output_vars.size(); ++i) {
             if ((i - shift) % freq == 0) {
-                result.push_back(output[i]);
-                subsampled_mask.push_back(o_mask[i]);
+                result.push_back(output_vars[i]);
+
+                if (o_mask != nullptr) {
+                    subsampled_mask.push_back(o_mask_vars[i]);
+                }
             }
         }
 
-        return std::make_pair(result, subsampled_mask);
+        if (o_mask == nullptr) {
+            return std::make_pair(autodiff::row_cat(result), o_mask);
+        } else {
+            return std::make_pair(autodiff::row_cat(result), autodiff::row_cat(subsampled_mask));
+        }
     }
 
 }

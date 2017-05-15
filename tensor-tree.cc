@@ -1,6 +1,6 @@
 #include "nn/tensor-tree.h"
 #include "ebt/ebt.h"
-#include "la/la.h"
+#include "la/la-cpu.h"
 #include "opt/opt.h"
 #include <fstream>
 #include <exception>
@@ -14,10 +14,10 @@ namespace tensor_tree {
         return std::make_shared<vertex>(vertex {"tensor"s, nullptr, {}, name});
     }
 
-    la::tensor<double>& get_tensor(std::shared_ptr<vertex> p)
+    la::cpu::tensor<double>& get_tensor(std::shared_ptr<vertex> p)
     {
         if (p->type == "tensor") {
-            return get_data<la::tensor<double>>(p);
+            return get_data<la::cpu::tensor<double>>(p);
         } else {
             throw std::logic_error("expecting tensor");
         }
@@ -62,8 +62,8 @@ namespace tensor_tree {
         std::vector<std::shared_ptr<vertex>> order = leaves_pre_order(root);
 
         for (auto& v: order) {
-            v->data = std::make_shared<la::tensor<double>>(
-                ebt::json::load<la::tensor<double>>(is));
+            v->data = std::make_shared<la::cpu::tensor<double>>(
+                ebt::json::load<la::cpu::tensor<double>>(is));
             std::getline(is, line);
         }
     }
@@ -80,7 +80,7 @@ namespace tensor_tree {
         std::vector<std::shared_ptr<vertex>> order = leaves_pre_order(root);
 
         for (auto& v: order) {
-            ebt::json::dump(get_data<la::tensor<double>>(v), os);
+            ebt::json::dump(get_data<la::cpu::tensor<double>>(v), os);
             os << std::endl;
         }
     }
@@ -98,10 +98,10 @@ namespace tensor_tree {
         auto p2_order = leaves_pre_order(p2);
 
         for (int i = 0; i < p1_order.size(); ++i) {
-            la::tensor<double> m;
-            auto& m2 = get_data<la::tensor<double>>(p2_order[i]);
-            la::resize_as(m, m2);
-            p1_order[i]->data = std::make_shared<la::tensor<double>>(std::move(m));
+            la::cpu::tensor<double> m;
+            auto& m2 = get_data<la::cpu::tensor<double>>(p2_order[i]);
+            la::cpu::resize_as(m, m2);
+            p1_order[i]->data = std::make_shared<la::cpu::tensor<double>>(std::move(m));
         }
     }
 
@@ -114,7 +114,7 @@ namespace tensor_tree {
                 continue;
             }
 
-            la::imul(get_data<la::tensor<double>>(t), a);
+            la::cpu::imul(get_data<la::cpu::tensor<double>>(t), a);
         }
     }
 
@@ -128,8 +128,8 @@ namespace tensor_tree {
                 continue;
             }
 
-            la::iadd(get_data<la::tensor<double>>(p1_order[i]),
-                get_data<la::tensor<double>>(p2_order[i]));
+            la::cpu::iadd(get_data<la::cpu::tensor<double>>(p1_order[i]),
+                get_data<la::cpu::tensor<double>>(p2_order[i]));
         }
     }
 
@@ -143,8 +143,8 @@ namespace tensor_tree {
                 continue;
             }
 
-            la::isub(get_data<la::tensor<double>>(p1_order[i]),
-                get_data<la::tensor<double>>(p2_order[i]));
+            la::cpu::isub(get_data<la::cpu::tensor<double>>(p1_order[i]),
+                get_data<la::cpu::tensor<double>>(p2_order[i]));
         }
     }
 
@@ -157,7 +157,7 @@ namespace tensor_tree {
                 continue;
             }
 
-            la::zero(get_data<la::tensor<double>>(t));
+            la::cpu::zero(get_data<la::cpu::tensor<double>>(t));
         }
     }
 
@@ -172,7 +172,7 @@ namespace tensor_tree {
                 continue;
             }
 
-            result += std::pow(la::norm(get_tensor(order[i])), 2);
+            result += std::pow(la::cpu::norm(get_tensor(order[i])), 2);
         }
 
         return std::sqrt(result);
@@ -187,7 +187,7 @@ namespace tensor_tree {
                 continue;
             }
 
-            if (la::has_nan(get_tensor(order[i]))) {
+            if (la::cpu::has_nan(get_tensor(order[i]))) {
                 return true;
             }
         }
@@ -209,8 +209,8 @@ namespace tensor_tree {
             }
 
             opt::const_step_update(
-                get_data<la::tensor<double>>(param_order[i]),
-                get_data<la::tensor<double>>(grad_order[i]),
+                get_data<la::cpu::tensor<double>>(param_order[i]),
+                get_data<la::cpu::tensor<double>>(grad_order[i]),
                 step_size);
         }
     }
@@ -231,9 +231,9 @@ namespace tensor_tree {
             }
 
             opt::const_step_update_momentum(
-                get_data<la::tensor<double>>(param_order[i]),
-                get_data<la::tensor<double>>(grad_order[i]),
-                get_data<la::tensor<double>>(opt_data_order[i]),
+                get_data<la::cpu::tensor<double>>(param_order[i]),
+                get_data<la::cpu::tensor<double>>(grad_order[i]),
+                get_data<la::cpu::tensor<double>>(opt_data_order[i]),
                 momentum, step_size);
         }
     }
@@ -254,9 +254,9 @@ namespace tensor_tree {
             }
 
             opt::adagrad_update(
-                get_data<la::tensor<double>>(param_order[i]),
-                get_data<la::tensor<double>>(grad_order[i]),
-                get_data<la::tensor<double>>(accu_grad_sq_order[i]),
+                get_data<la::cpu::tensor<double>>(param_order[i]),
+                get_data<la::cpu::tensor<double>>(grad_order[i]),
+                get_data<la::cpu::tensor<double>>(accu_grad_sq_order[i]),
                 step_size);
         }
     }
@@ -277,9 +277,9 @@ namespace tensor_tree {
             }
 
             opt::rmsprop_update(
-                get_data<la::tensor<double>>(param_order[i]),
-                get_data<la::tensor<double>>(grad_order[i]),
-                get_data<la::tensor<double>>(opt_data_order[i]),
+                get_data<la::cpu::tensor<double>>(param_order[i]),
+                get_data<la::cpu::tensor<double>>(grad_order[i]),
+                get_data<la::cpu::tensor<double>>(opt_data_order[i]),
                 decay, step_size);
         }
     }
@@ -305,10 +305,10 @@ namespace tensor_tree {
             }
 
             opt::adam_update(
-                get_data<la::tensor<double>>(param_order[i]),
-                get_data<la::tensor<double>>(grad_order[i]),
-                get_data<la::tensor<double>>(first_moment_order[i]),
-                get_data<la::tensor<double>>(second_moment_order[i]),
+                get_data<la::cpu::tensor<double>>(param_order[i]),
+                get_data<la::cpu::tensor<double>>(grad_order[i]),
+                get_data<la::cpu::tensor<double>>(first_moment_order[i]),
+                get_data<la::cpu::tensor<double>>(second_moment_order[i]),
                 time, alpha, beta1, beta2);
         }
     }
@@ -425,7 +425,7 @@ namespace tensor_tree {
                 if (u->type != "nil") {
                     k->name = u->name;
                     k->type = u->type;
-                    k->data = std::make_shared<la::tensor<double>>(la::tensor<double>(get_tensor(u)));
+                    k->data = std::make_shared<la::cpu::tensor<double>>(la::cpu::tensor<double>(get_tensor(u)));
                 }
 
                 vertex_map[u] = k;
