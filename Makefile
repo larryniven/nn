@@ -2,7 +2,7 @@ CXXFLAGS += -std=c++14 -I ../ -L ../ebt -L ../la -L ../autodiff -L ../opt -L ../
 NVCCFLAGS += -std=c++11 -I ../ -L ../ebt -L ../la -L ../autodiff -L ../opt -L ../speech
 AR = gcc-ar
 
-obj = nn.o cnn.o tensor-tree.o lstm.o lstm-frame.o lstm-tensor-tree.o
+obj = nn.o cnn.o tensor-tree.o lstm.o lstm-frame.o lstm-tensor-tree.o cnn.o cnn-frame.o
 
 .PHONY: all clean
 

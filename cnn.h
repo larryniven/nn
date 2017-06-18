@@ -6,22 +6,32 @@
 
 namespace cnn {
 
-    std::shared_ptr<tensor_tree::vertex> make_cnn_tensor_tree(int layer);
-
-    std::shared_ptr<tensor_tree::vertex> make_densenet_tensor_tree(int layer);
-
     struct transcriber {
         virtual std::shared_ptr<autodiff::op_t>
-        operator()(std::shared_ptr<autodiff::op_t> input,
-            std::shared_ptr<tensor_tree::vertex> var_tree) = 0;
+        operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> input) = 0;
     };
 
     struct cnn_transcriber
         : public transcriber {
 
+        int d1;
+        int d2;
+
+        cnn_transcriber();
+        cnn_transcriber(int d1, int d2);
+
         virtual std::shared_ptr<autodiff::op_t>
-        operator()(std::shared_ptr<autodiff::op_t> input,
-            std::shared_ptr<tensor_tree::vertex> var_tree) override;
+        operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> input) override;
+    };
+
+    struct fc_transcriber
+        : public transcriber {
+
+        virtual std::shared_ptr<autodiff::op_t>
+        operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> input) override;
     };
 
     struct dropout_transcriber
@@ -35,8 +45,8 @@ namespace cnn {
             double prob, std::default_random_engine& gen);
 
         virtual std::shared_ptr<autodiff::op_t>
-        operator()(std::shared_ptr<autodiff::op_t> input,
-            std::shared_ptr<tensor_tree::vertex> var_tree) override;
+        operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> input) override;
     };
 
     struct multilayer_transcriber
@@ -45,8 +55,17 @@ namespace cnn {
         std::vector<std::shared_ptr<transcriber>> layers;
 
         virtual std::shared_ptr<autodiff::op_t>
-        operator()(std::shared_ptr<autodiff::op_t> input,
-            std::shared_ptr<tensor_tree::vertex> var_tree) override;
+        operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> input) override;
+    };
+
+    struct logsoftmax_transcriber
+        : public transcriber {
+
+        virtual std::shared_ptr<autodiff::op_t>
+        operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> input) override;
+
     };
 
     struct densenet_transcriber
@@ -57,8 +76,9 @@ namespace cnn {
         densenet_transcriber(int layer);
 
         virtual std::shared_ptr<autodiff::op_t>
-        operator()(std::shared_ptr<autodiff::op_t> input,
-            std::shared_ptr<tensor_tree::vertex> var_tree) override;
+        operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> input) override;
+
     };
 
     std::vector<std::shared_ptr<autodiff::op_t>> ifo_pooling(
@@ -97,8 +117,8 @@ namespace cnn {
             std::shared_ptr<transcriber> output_gate);
 
         virtual std::shared_ptr<autodiff::op_t>
-        operator()(std::shared_ptr<autodiff::op_t> input,
-            std::shared_ptr<tensor_tree::vertex> var_tree) override;
+        operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> input) override;
     };
 
 }

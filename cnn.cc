@@ -2,44 +2,35 @@
 
 namespace cnn {
 
-    std::shared_ptr<tensor_tree::vertex> make_cnn_tensor_tree(int layer)
-    {
-        tensor_tree::vertex root { "nil" };
-    
-        for (int i = 0; i < layer; ++i) {
-            tensor_tree::vertex conv { "nil" };
-            conv.children.push_back(tensor_tree::make_tensor("conv weight"));
-            conv.children.push_back(tensor_tree::make_tensor("conv bias"));
-            root.children.push_back(std::make_shared<tensor_tree::vertex>(conv));
-        }
-    
-        return std::make_shared<tensor_tree::vertex>(root);
-    }
+    cnn_transcriber::cnn_transcriber()
+        : d1(1), d2(1)
+    {}
 
-    std::shared_ptr<tensor_tree::vertex> make_densenet_tensor_tree(int layer)
-    {
-        tensor_tree::vertex root { "nil" };
-    
-        tensor_tree::vertex conv { "nil" };
-        for (int i = 0; i < layer; ++i) {
-            for (int j = 0; j < i + 1; ++j) {
-                conv.children.push_back(tensor_tree::make_tensor("conv"));
-            }
-        }
-        root.children.push_back(std::make_shared<tensor_tree::vertex>(conv));
-    
-        return std::make_shared<tensor_tree::vertex>(root);
-    }
+    cnn_transcriber::cnn_transcriber(int d1, int d2)
+        : d1(d1), d2(d2)
+    {}
 
     std::shared_ptr<autodiff::op_t>
-    cnn_transcriber::operator()(std::shared_ptr<autodiff::op_t> input,
-        std::shared_ptr<tensor_tree::vertex> var_tree)
+    cnn_transcriber::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> input)
     {
         auto k = autodiff::corr_linearize(input,
-            tensor_tree::get_var(var_tree->children[0]));
+            tensor_tree::get_var(var_tree->children[0]), d1, d2);
 
         auto z = autodiff::mul(k, tensor_tree::get_var(var_tree->children[0]));
 
+        auto b = autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[1]), z);
+
+        return autodiff::relu(autodiff::add(z, b));
+    }
+
+    std::shared_ptr<autodiff::op_t>
+    fc_transcriber::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> input)
+    {
+        auto& t = autodiff::get_output<la::cpu::tensor<double>>(input);
+        auto m = autodiff::reshape(input, {t.size(0), t.vec_size() / t.size(0)});
+        auto z = autodiff::mul(m, tensor_tree::get_var(var_tree->children[0]));
         auto b = autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[1]), z);
 
         return autodiff::relu(autodiff::add(z, b));
@@ -51,24 +42,36 @@ namespace cnn {
     {}
 
     std::shared_ptr<autodiff::op_t>
-    dropout_transcriber::operator()(std::shared_ptr<autodiff::op_t> input,
-        std::shared_ptr<tensor_tree::vertex> var_tree)
+    dropout_transcriber::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> input)
     {
         input = autodiff::emul(input, autodiff::dropout_mask(input, prob, gen));
-        return (*base)(input, var_tree);
+        return (*base)(var_tree, input);
     }
 
     std::shared_ptr<autodiff::op_t>
-    multilayer_transcriber::operator()(std::shared_ptr<autodiff::op_t> input,
-        std::shared_ptr<tensor_tree::vertex> var_tree)
+    multilayer_transcriber::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> input)
     {
         std::shared_ptr<autodiff::op_t> feat = input;
 
         for (int i = 0; i < layers.size(); ++i) {
-            feat = (*layers[i])(feat, var_tree->children[i]);
+            feat = (*layers[i])(var_tree->children[i], feat);
         }
 
         return feat;
+    }
+
+    std::shared_ptr<autodiff::op_t>
+    logsoftmax_transcriber::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> input)
+    {
+        auto& t = autodiff::get_output<la::cpu::tensor<double>>(input);
+        auto m = autodiff::reshape(input, {t.size(0), t.vec_size() / t.size(0)});
+        auto z = autodiff::mul(m, tensor_tree::get_var(var_tree->children[0]));
+        auto b = autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[1]), z);
+
+        return autodiff::logsoftmax(autodiff::add(z, b));
     }
 
     densenet_transcriber::densenet_transcriber(int layer)
@@ -76,8 +79,8 @@ namespace cnn {
     {}
 
     std::shared_ptr<autodiff::op_t>
-    densenet_transcriber::operator()(std::shared_ptr<autodiff::op_t> input,
-        std::shared_ptr<tensor_tree::vertex> var_tree)
+    densenet_transcriber::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> input)
     {
         std::vector<std::shared_ptr<autodiff::op_t>> layers;
 
@@ -92,8 +95,8 @@ namespace cnn {
 
             std::vector<std::shared_ptr<autodiff::op_t>> muls;
             for (int k = 0; k < i + 1; ++k) {
-                muls.push_back(autodiff::mul(layers[k],
-                    tensor_tree::get_var(var_tree->children[ell + k])));
+                muls.push_back(autodiff::mul(tensor_tree::get_var(var_tree->children[ell + k]),
+                    layers[k]));
             }
             feat = autodiff::relu(autodiff::add(muls));
 
@@ -169,8 +172,8 @@ namespace cnn {
     {}
 
     std::shared_ptr<autodiff::op_t>
-    conv_fo_pooling_transcriber::operator()(std::shared_ptr<autodiff::op_t> input,
-        std::shared_ptr<tensor_tree::vertex> var_tree)
+    conv_fo_pooling_transcriber::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> input)
     {
         auto input_lin = autodiff::corr_linearize(input,
             tensor_tree::get_var(var_tree->children[0]->children[0]));
