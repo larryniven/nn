@@ -213,6 +213,23 @@ namespace lstm {
 
     };
 
+    struct res_transcriber
+        : public transcriber {
+
+        std::shared_ptr<transcriber> base;
+
+        res_transcriber(std::shared_ptr<transcriber> base);
+
+        virtual
+        std::pair<std::shared_ptr<autodiff::op_t>,
+            std::shared_ptr<autodiff::op_t>>
+        operator()(
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> const& feat,
+            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
+
+    };
+
     struct subsampled_transcriber
         : public transcriber {
 

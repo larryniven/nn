@@ -19,6 +19,12 @@ namespace lstm_frame {
         std::default_random_engine *gen);
 
     std::shared_ptr<lstm::transcriber>
+    make_res_transcriber(
+        int layer,
+        double dropout,
+        std::default_random_engine *gen);
+
+    std::shared_ptr<lstm::transcriber>
     make_uni_transcriber(
         int layer,
         double dropout,

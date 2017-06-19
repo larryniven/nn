@@ -418,6 +418,24 @@ namespace lstm {
         return std::make_pair(result, o_mask);
     }
 
+    res_transcriber::res_transcriber(std::shared_ptr<transcriber> base)
+        : base(base)
+    {}
+
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
+    res_transcriber::operator()(
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
+    {
+        std::shared_ptr<autodiff::op_t> output;
+        std::shared_ptr<autodiff::op_t> o_mask;
+        std::tie(output, o_mask) = (*base)(var_tree, feat, mask);
+
+        return std::make_pair(autodiff::add(output, feat), o_mask);
+    }
+
     subsampled_transcriber::subsampled_transcriber(
         int freq, int shift, std::shared_ptr<transcriber> base)
         : freq(freq), shift(shift), base(base)
