@@ -15,15 +15,35 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> forget_gate;
         std::shared_ptr<autodiff::op_t> output;
         std::shared_ptr<autodiff::op_t> cell;
-        std::shared_ptr<autodiff::op_t> cell_tmp;
         std::shared_ptr<autodiff::op_t> input;
     };
 
-    lstm_step_nn_t make_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> cell,
-        std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> input);
+    lstm_step_nn_t make_lstm_step_nn(
+        std::shared_ptr<autodiff::op_t> input,
+        std::shared_ptr<autodiff::op_t> prev_output,
+        std::shared_ptr<autodiff::op_t> prev_cell,
+        std::shared_ptr<autodiff::op_t> output_weight,
+        std::shared_ptr<autodiff::op_t> cell2i,
+        std::shared_ptr<autodiff::op_t> cell2f,
+        std::shared_ptr<autodiff::op_t> cell2o,
+        std::shared_ptr<autodiff::op_t> cell_mask,
+        std::shared_ptr<autodiff::op_t> output_storage,
+        int batch_size,
+        int cell_dim);
 
+    lstm_step_nn_t make_dyer_lstm_step_nn(
+        std::shared_ptr<autodiff::op_t> input,
+        std::shared_ptr<autodiff::op_t> prev_output,
+        std::shared_ptr<autodiff::op_t> prev_cell,
+        std::shared_ptr<autodiff::op_t> output_weight,
+        std::shared_ptr<autodiff::op_t> cell2i,
+        std::shared_ptr<autodiff::op_t> cell2o,
+        std::shared_ptr<autodiff::op_t> cell_mask,
+        std::shared_ptr<autodiff::op_t> output_storage,
+        int batch_size,
+        int cell_dim);
+
+#if 0
     lstm_step_nn_t make_dyer_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> prev_cell,
         std::shared_ptr<autodiff::op_t> prev_output,
@@ -33,59 +53,7 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> cell,
         std::shared_ptr<autodiff::op_t> output,
         std::shared_ptr<autodiff::op_t> cell_mask = nullptr);
-
-    // step transcriber
-
-    struct step_transcriber {
-
-        virtual ~step_transcriber();
-
-        virtual lstm_step_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> prev_cell,
-            std::shared_ptr<autodiff::op_t> prev_output,
-            std::shared_ptr<autodiff::op_t> input_h,
-            std::shared_ptr<autodiff::op_t> input_i,
-            std::shared_ptr<autodiff::op_t> input_o,
-            std::shared_ptr<autodiff::op_t> cell,
-            std::shared_ptr<autodiff::op_t> output,
-            std::shared_ptr<autodiff::op_t> cell_mask = nullptr) = 0;
-
-    };
-
-#if 0
-    struct lstm_step_transcriber
-        : public step_transcriber {
-
-        std::shared_ptr<autodiff::op_t> cell;
-        std::shared_ptr<autodiff::op_t> output;
-
-        lstm_step_transcriber();
-
-        virtual std::shared_ptr<autodiff::op_t> operator()(
-            std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> input,
-            std::shared_ptr<autodiff::op_t> cell_mask = nullptr) override;
-
-    };
 #endif
-
-    struct dyer_lstm_step_transcriber
-        : public step_transcriber {
-
-        virtual lstm_step_nn_t operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> prev_cell,
-            std::shared_ptr<autodiff::op_t> prev_output,
-            std::shared_ptr<autodiff::op_t> input_h,
-            std::shared_ptr<autodiff::op_t> input_i,
-            std::shared_ptr<autodiff::op_t> input_o,
-            std::shared_ptr<autodiff::op_t> cell,
-            std::shared_ptr<autodiff::op_t> output,
-            std::shared_ptr<autodiff::op_t> cell_mask) override;
-
-    };
-
-    std::vector<std::shared_ptr<autodiff::op_t>> split_rows(
-        std::shared_ptr<autodiff::op_t> t);
 
     // tanscriber
 
@@ -96,6 +64,9 @@ namespace lstm {
         std::pair<std::shared_ptr<autodiff::op_t>,
             std::shared_ptr<autodiff::op_t>>
         operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
             std::shared_ptr<tensor_tree::vertex> var_tree,
             std::shared_ptr<autodiff::op_t> const& feat,
             std::shared_ptr<autodiff::op_t> const& mask = nullptr) const = 0;
@@ -104,17 +75,40 @@ namespace lstm {
     struct lstm_transcriber
         : public transcriber {
 
-        mutable std::shared_ptr<autodiff::op_t> debug;
-
-        std::shared_ptr<step_transcriber> step;
         bool reverse;
 
-        lstm_transcriber(std::shared_ptr<step_transcriber> step, bool reverse = false);
+        lstm_transcriber(bool reverse = false);
 
         virtual
         std::pair<std::shared_ptr<autodiff::op_t>,
             std::shared_ptr<autodiff::op_t>>
         operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            std::shared_ptr<autodiff::op_t> const& feat,
+            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
+
+    };
+
+    std::vector<std::shared_ptr<autodiff::op_t>> split_rows(
+        std::shared_ptr<autodiff::op_t> t);
+
+    struct dyer_lstm_transcriber
+        : public transcriber {
+
+        bool reverse;
+
+        dyer_lstm_transcriber(bool reverse = false);
+
+        virtual
+        std::pair<std::shared_ptr<autodiff::op_t>,
+            std::shared_ptr<autodiff::op_t>>
+        operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
             std::shared_ptr<tensor_tree::vertex> var_tree,
             std::shared_ptr<autodiff::op_t> const& feat,
             std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
@@ -137,6 +131,9 @@ namespace lstm {
         std::pair<std::shared_ptr<autodiff::op_t>,
             std::shared_ptr<autodiff::op_t>>
         operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
             std::shared_ptr<tensor_tree::vertex> var_tree,
             std::shared_ptr<autodiff::op_t> const& feat,
             std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
@@ -157,6 +154,9 @@ namespace lstm {
         std::pair<std::shared_ptr<autodiff::op_t>,
             std::shared_ptr<autodiff::op_t>>
         operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
             std::shared_ptr<tensor_tree::vertex> var_tree,
             std::shared_ptr<autodiff::op_t> const& feat,
             std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
@@ -176,6 +176,9 @@ namespace lstm {
         std::pair<std::shared_ptr<autodiff::op_t>,
             std::shared_ptr<autodiff::op_t>>
         operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
             std::shared_ptr<tensor_tree::vertex> var_tree,
             std::shared_ptr<autodiff::op_t> const& feat,
             std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
@@ -190,6 +193,9 @@ namespace lstm {
         std::pair<std::shared_ptr<autodiff::op_t>,
             std::shared_ptr<autodiff::op_t>>
         operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
             std::shared_ptr<tensor_tree::vertex> var_tree,
             std::shared_ptr<autodiff::op_t> const& feat,
             std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
@@ -207,6 +213,9 @@ namespace lstm {
         std::pair<std::shared_ptr<autodiff::op_t>,
             std::shared_ptr<autodiff::op_t>>
         operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
             std::shared_ptr<tensor_tree::vertex> var_tree,
             std::shared_ptr<autodiff::op_t> const& feat,
             std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
@@ -224,6 +233,9 @@ namespace lstm {
         std::pair<std::shared_ptr<autodiff::op_t>,
             std::shared_ptr<autodiff::op_t>>
         operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
             std::shared_ptr<tensor_tree::vertex> var_tree,
             std::shared_ptr<autodiff::op_t> const& feat,
             std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
@@ -243,6 +255,9 @@ namespace lstm {
         std::pair<std::shared_ptr<autodiff::op_t>,
             std::shared_ptr<autodiff::op_t>>
         operator()(
+            int nframes,
+            int batch_size,
+            int cell_dim,
             std::shared_ptr<tensor_tree::vertex> var_tree,
             std::shared_ptr<autodiff::op_t> const& feat,
             std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;

@@ -5,68 +5,116 @@
 
 namespace lstm {
 
-    lstm_step_nn_t make_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> cell,
-        std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> input)
+    lstm_step_nn_t make_lstm_step_nn(
+        std::shared_ptr<autodiff::op_t> input,
+        std::shared_ptr<autodiff::op_t> prev_output,
+        std::shared_ptr<autodiff::op_t> prev_cell,
+        std::shared_ptr<autodiff::op_t> output_weight,
+        std::shared_ptr<autodiff::op_t> cell2i,
+        std::shared_ptr<autodiff::op_t> cell2f,
+        std::shared_ptr<autodiff::op_t> cell2o,
+        std::shared_ptr<autodiff::op_t> cell_mask,
+        std::shared_ptr<autodiff::op_t> output_storage,
+        int batch_size,
+        int cell_dim)
     {
         lstm_step_nn_t result;
 
-        result.input = nullptr;
+        auto pre_gates = autodiff::add(
+            std::vector<std::shared_ptr<autodiff::op_t>> {
+                input,
+                autodiff::mul(prev_output, output_weight)
+            });
 
-        std::vector<std::shared_ptr<autodiff::op_t>> h_comp { get_var(var_tree->children[2]) };
-        std::vector<std::shared_ptr<autodiff::op_t>> input_gate_comp { get_var(var_tree->children[6]) };
-        std::vector<std::shared_ptr<autodiff::op_t>> forget_gate_comp { get_var(var_tree->children[14]) };
+        unsigned int ubatch_size = batch_size;
+        unsigned int ucell_dim = cell_dim;
 
-        if (input != nullptr) {
-            result.input = autodiff::mul(input, get_var(var_tree->children[0]));
-            h_comp.push_back(result.input);
-            input_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[3])));
-            forget_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[11])));
+        auto pre_g = autodiff::subtensor(pre_gates, std::vector<int> {0, 0},
+            std::vector<unsigned int> { ubatch_size, ucell_dim });
+        auto pre_i = autodiff::subtensor(pre_gates, std::vector<int> {0, cell_dim},
+            std::vector<unsigned int> { ubatch_size, ucell_dim });
+        auto pre_f = autodiff::subtensor(pre_gates, std::vector<int> {0, 2 * cell_dim},
+            std::vector<unsigned int> { ubatch_size, ucell_dim });
+        auto pre_o = autodiff::subtensor(pre_gates, std::vector<int> {0, 3 * cell_dim},
+            std::vector<unsigned int> { ubatch_size, ucell_dim });
+
+        auto g = autodiff::tanh(pre_g);
+        result.input_gate = autodiff::logistic(autodiff::add(pre_i, autodiff::emul(prev_cell, cell2i)));
+        result.forget_gate = autodiff::logistic(autodiff::add(pre_f, autodiff::emul(prev_cell, cell2f)));
+
+        result.cell = autodiff::add(autodiff::emul(result.input_gate, g),
+            autodiff::emul(result.forget_gate, prev_cell));
+
+        if (cell_mask != nullptr) {
+            result.cell = autodiff::emul(result.cell,
+                autodiff::rep_col_to(cell_mask, result.cell));
         }
 
-        if (output != nullptr) {
-            h_comp.push_back(autodiff::mul(output, get_var(var_tree->children[1])));
-            input_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[4])));
-            forget_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[12])));
-        }
+        result.output_gate = autodiff::logistic(
+            autodiff::add(pre_o, autodiff::emul(result.cell, cell2o)));
 
-        if (cell != nullptr) {
-            input_gate_comp.push_back(autodiff::emul(get_var(var_tree->children[5]), cell));
-            forget_gate_comp.push_back(autodiff::emul(get_var(var_tree->children[13]), cell));
-        }
-
-        std::shared_ptr<autodiff::op_t> h = autodiff::tanh(autodiff::add(h_comp));
-        result.input_gate = autodiff::logistic(autodiff::add(input_gate_comp));
-        result.forget_gate = autodiff::logistic(autodiff::add(forget_gate_comp));
-
-        if (cell != nullptr) {
-            result.cell = autodiff::add(
-                autodiff::emul(result.forget_gate, cell),
-                autodiff::emul(result.input_gate, h));
-        } else {
-            result.cell = autodiff::emul(result.input_gate, h);
-        }
-
-        std::vector<std::shared_ptr<autodiff::op_t>> output_gate_comp {
-            get_var(var_tree->children[10]), autodiff::emul(get_var(var_tree->children[9]), result.cell) };
-
-        if (input != nullptr) {
-            output_gate_comp.push_back(autodiff::mul(input, get_var(var_tree->children[7])));
-        }
-
-        if (output != nullptr) {
-            output_gate_comp.push_back(autodiff::mul(output, get_var(var_tree->children[8])));
-        }
-
-        result.output_gate = autodiff::logistic(autodiff::add(output_gate_comp));
-
-        result.output = autodiff::emul(result.output_gate,
-            autodiff::tanh(result.cell));
+        result.output = autodiff::emul(output_storage,
+            result.output_gate, autodiff::tanh(result.cell));
 
         return result;
     }
 
+    lstm_step_nn_t make_dyer_lstm_step_nn(
+        std::shared_ptr<autodiff::op_t> input,
+        std::shared_ptr<autodiff::op_t> prev_output,
+        std::shared_ptr<autodiff::op_t> prev_cell,
+        std::shared_ptr<autodiff::op_t> output_weight,
+        std::shared_ptr<autodiff::op_t> cell2i,
+        std::shared_ptr<autodiff::op_t> cell2o,
+        std::shared_ptr<autodiff::op_t> cell_mask,
+        std::shared_ptr<autodiff::op_t> output_storage,
+        int batch_size,
+        int cell_dim)
+    {
+        lstm_step_nn_t result;
+
+        auto pre_gates = autodiff::add(
+            std::vector<std::shared_ptr<autodiff::op_t>> {
+                input,
+                autodiff::mul(prev_output, output_weight)
+            });
+
+        unsigned int ubatch_size = batch_size;
+        unsigned int ucell_dim = cell_dim;
+
+        auto pre_g = autodiff::subtensor(pre_gates, std::vector<int> {0, 0},
+            std::vector<unsigned int> { ubatch_size, ucell_dim });
+        auto pre_i = autodiff::subtensor(pre_gates, std::vector<int> {0, cell_dim},
+            std::vector<unsigned int> { ubatch_size, ucell_dim });
+        auto pre_o = autodiff::subtensor(pre_gates, std::vector<int> {0, 2 * cell_dim},
+            std::vector<unsigned int> { ubatch_size, ucell_dim });
+
+        auto g = autodiff::tanh(pre_g);
+        result.input_gate = autodiff::logistic(autodiff::add(pre_i, autodiff::mul(prev_cell, cell2i)));
+
+        auto one = autodiff::resize_as(result.input_gate, 1);
+        one->grad_needed = false;
+
+        result.forget_gate = autodiff::sub(one, result.input_gate);
+
+        result.cell = autodiff::add(autodiff::emul(result.input_gate, g),
+            autodiff::emul(result.forget_gate, prev_cell));
+
+        if (cell_mask != nullptr) {
+            result.cell = autodiff::emul(result.cell,
+                autodiff::rep_col_to(cell_mask, result.cell));
+        }
+
+        result.output_gate = autodiff::logistic(
+            autodiff::add(pre_o, autodiff::mul(result.cell, cell2o)));
+
+        result.output = autodiff::emul(output_storage,
+            result.output_gate, autodiff::tanh(result.cell));
+
+        return result;
+    }
+
+#if 0
     lstm_step_nn_t make_dyer_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> prev_cell,
         std::shared_ptr<autodiff::op_t> prev_output,
@@ -156,47 +204,113 @@ namespace lstm {
 
         return result;
     }
-
-    // step transcriber
-
-    step_transcriber::~step_transcriber()
-    {}
-
-#if 0
-    lstm_step_transcriber::lstm_step_transcriber()
-        : cell(nullptr), output(nullptr)
-    {}
-
-    std::shared_ptr<autodiff::op_t> lstm_step_transcriber::operator()(
-        std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> input,
-        std::shared_ptr<autodiff::op_t> cell_mask)
-    {
-        // TODO: minibatching does not work here
-        lstm_step_nn_t nn = make_lstm_step_nn(var_tree, cell, output, input);
-
-        cell = nn.cell;
-        output = nn.output;
-
-        return output;
-    }
 #endif
 
-    lstm_step_nn_t dyer_lstm_step_transcriber::operator()(
+    // transcriber
+
+    transcriber::~transcriber()
+    {}
+
+    lstm_transcriber::lstm_transcriber(bool reverse)
+        : reverse(reverse)
+    {}
+
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
+    lstm_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
         std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> prev_cell,
-        std::shared_ptr<autodiff::op_t> prev_output,
-        std::shared_ptr<autodiff::op_t> input_h,
-        std::shared_ptr<autodiff::op_t> input_i,
-        std::shared_ptr<autodiff::op_t> input_o,
-        std::shared_ptr<autodiff::op_t> cell,
-        std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> cell_mask)
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
     {
-        return make_dyer_lstm_step_nn(var_tree, prev_cell, prev_output,
-            input_h, input_i, input_o, cell, output, cell_mask);
+        auto pre_input = autodiff::mul(feat, tensor_tree::get_var(var_tree->children[0]));
+        auto bias = autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[1]), pre_input);
+        auto input = autodiff::add(pre_input, bias);
+
+        unsigned int unframes = nframes;
+        unsigned int ubatch_size = batch_size;
+        unsigned int ucell_dim = cell_dim;
+
+        auto& comp_graph = *feat->graph;
+
+        la::cpu::tensor<double> zeros;
+        zeros.resize(std::vector<unsigned int> { ubatch_size, ucell_dim });
+
+        auto cell = comp_graph.var(zeros);
+        auto output = comp_graph.var(zeros);
+
+        zeros.resize(std::vector<unsigned int> { unframes, ubatch_size, ucell_dim });
+
+        auto output_storage = comp_graph.var(zeros);
+
+        std::vector<std::shared_ptr<autodiff::op_t>> outputs;
+
+        if (reverse) {
+            for (int t = nframes - 1; t >= 0; --t) {
+                std::shared_ptr<autodiff::op_t> mask_t = nullptr;
+
+                if (mask != nullptr) {
+                    mask_t = autodiff::weak_var(mask, t * batch_size,
+                        std::vector<unsigned int> { ubatch_size });
+                }
+
+                auto output_t_storage = autodiff::weak_var(output_storage, t * batch_size * cell_dim,
+                    std::vector<unsigned int> { ubatch_size, ucell_dim });
+
+                auto input_t = autodiff::weak_var(input, t * batch_size * 4 * cell_dim,
+                    std::vector<unsigned int> { ubatch_size, 4 * ucell_dim});
+
+                lstm_step_nn_t result = make_lstm_step_nn(input_t, output, cell,
+                    tensor_tree::get_var(var_tree->children[2]),
+                    tensor_tree::get_var(var_tree->children[3]),
+                    tensor_tree::get_var(var_tree->children[4]),
+                    tensor_tree::get_var(var_tree->children[5]),
+                    mask_t, output_t_storage,
+                    batch_size, cell_dim);
+
+                cell = result.cell;
+                output = result.output;
+
+                outputs.push_back(output);
+            }
+
+            std::reverse(outputs.begin(), outputs.end());
+        } else {
+            for (int t = 0; t < nframes; ++t) {
+                std::shared_ptr<autodiff::op_t> mask_t = nullptr;
+
+                if (mask != nullptr) {
+                    mask_t = autodiff::weak_var(mask, t * batch_size,
+                        std::vector<unsigned int> { ubatch_size });
+                }
+
+                auto output_t_storage = autodiff::weak_var(output_storage, t * batch_size * cell_dim,
+                    std::vector<unsigned int> { ubatch_size, ucell_dim });
+
+                auto input_t = autodiff::weak_var(input, t * batch_size * 4 * cell_dim,
+                    std::vector<unsigned int> { ubatch_size, 4 * ucell_dim});
+
+                lstm_step_nn_t result = make_lstm_step_nn(input_t, output, cell,
+                    tensor_tree::get_var(var_tree->children[2]),
+                    tensor_tree::get_var(var_tree->children[3]),
+                    tensor_tree::get_var(var_tree->children[4]),
+                    tensor_tree::get_var(var_tree->children[5]),
+                    mask_t, output_t_storage,
+                    batch_size, cell_dim);
+
+                cell = result.cell;
+                output = result.output;
+
+                outputs.push_back(output);
+            }
+        }
+
+        return std::make_pair(autodiff::weak_cat(outputs, output_storage), mask);
     }
 
+    // eager only
     std::vector<std::shared_ptr<autodiff::op_t>> split_rows(
         std::shared_ptr<autodiff::op_t> t)
     {
@@ -214,20 +328,111 @@ namespace lstm {
         return result;
     }
 
-    // transcriber
-
-    transcriber::~transcriber()
-    {}
-
-    lstm_transcriber::lstm_transcriber(
-        std::shared_ptr<step_transcriber> step,
+    dyer_lstm_transcriber::dyer_lstm_transcriber(
         bool reverse)
-        : step(step), reverse(reverse)
+        : reverse(reverse)
     {}
 
     std::pair<std::shared_ptr<autodiff::op_t>,
         std::shared_ptr<autodiff::op_t>>
-    lstm_transcriber::operator()(
+    dyer_lstm_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        std::shared_ptr<autodiff::op_t> const& feat,
+        std::shared_ptr<autodiff::op_t> const& mask) const
+    {
+        auto pre_input = autodiff::mul(feat, tensor_tree::get_var(var_tree->children[0]));
+        auto bias = autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[1]), pre_input);
+        auto input = autodiff::add(pre_input, bias);
+
+        unsigned int unframes = nframes;
+        unsigned int ubatch_size = batch_size;
+        unsigned int ucell_dim = cell_dim;
+
+        auto& comp_graph = *feat->graph;
+
+        la::cpu::tensor<double> zeros;
+        zeros.resize(std::vector<unsigned int> { ubatch_size, ucell_dim });
+
+        auto cell = comp_graph.var(zeros);
+        auto output = comp_graph.var(zeros);
+
+        zeros.resize(std::vector<unsigned int> { unframes, ubatch_size, ucell_dim });
+
+        auto output_storage = comp_graph.var(zeros);
+
+        std::vector<std::shared_ptr<autodiff::op_t>> outputs;
+
+        if (reverse) {
+            for (int t = nframes - 1; t >= 0; --t) {
+                std::shared_ptr<autodiff::op_t> mask_t = nullptr;
+
+                if (mask != nullptr) {
+                    mask_t = autodiff::weak_var(mask, t * batch_size,
+                        std::vector<unsigned int> { ubatch_size });
+                }
+
+                auto output_t_storage = autodiff::weak_var(output_storage, t * batch_size * cell_dim,
+                    std::vector<unsigned int> { ubatch_size, ucell_dim });
+
+                auto input_t = autodiff::weak_var(input, t * batch_size * 3 * cell_dim,
+                    std::vector<unsigned int> { ubatch_size, 3 * ucell_dim});
+
+                lstm_step_nn_t result = make_dyer_lstm_step_nn(input_t, output, cell,
+                    tensor_tree::get_var(var_tree->children[2]),
+                    tensor_tree::get_var(var_tree->children[3]),
+                    tensor_tree::get_var(var_tree->children[4]),
+                    mask_t, output_t_storage,
+                    batch_size, cell_dim);
+
+                cell = result.cell;
+                output = result.output;
+
+                outputs.push_back(output);
+            }
+
+            std::reverse(outputs.begin(), outputs.end());
+        } else {
+            for (int t = 0; t < nframes; ++t) {
+                std::shared_ptr<autodiff::op_t> mask_t = nullptr;
+
+                if (mask != nullptr) {
+                    mask_t = autodiff::weak_var(mask, t * batch_size,
+                        std::vector<unsigned int> { ubatch_size });
+                }
+
+                auto output_t_storage = autodiff::weak_var(output_storage, t * batch_size * cell_dim,
+                    std::vector<unsigned int> { ubatch_size, ucell_dim });
+
+                auto input_t = autodiff::weak_var(input, t * batch_size * 3 * cell_dim,
+                    std::vector<unsigned int> { ubatch_size, 3 * ucell_dim});
+
+                lstm_step_nn_t result = make_dyer_lstm_step_nn(input_t, output, cell,
+                    tensor_tree::get_var(var_tree->children[2]),
+                    tensor_tree::get_var(var_tree->children[3]),
+                    tensor_tree::get_var(var_tree->children[4]),
+                    mask_t, output_t_storage,
+                    batch_size, cell_dim);
+
+                cell = result.cell;
+                output = result.output;
+
+                outputs.push_back(output);
+            }
+        }
+
+        return std::make_pair(autodiff::weak_cat(outputs, output_storage), mask);
+    }
+
+#if 0
+    std::pair<std::shared_ptr<autodiff::op_t>,
+        std::shared_ptr<autodiff::op_t>>
+    dyer_lstm_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> const& feat,
         std::shared_ptr<autodiff::op_t> const& mask) const
@@ -262,28 +467,26 @@ namespace lstm {
             mask_vars = split_rows(mask);
         }
 
-        auto& feat_t = autodiff::get_output<la::tensor_like<double>>(feat);
-
         if (reverse) {
-            for (int i = feat_t.size(0) - 1; i >= 0; --i) {
-                if (i == feat_t.size(0) - 1) {
-                    (*step)(var_tree, nullptr, nullptr,
+            for (int i = nframes - 1; i >= 0; --i) {
+                if (i == nframes - 1) {
+                    make_dyer_lstm_step_nn(var_tree, nullptr, nullptr,
                        input_h_vars[i], input_i_vars[i], input_o_vars[i],
                        cell_vars[i], output_vars[i], mask_vars[i]);
                 } else {
-                    (*step)(var_tree, cell_vars[i+1], output_vars[i+1],
+                    make_dyer_lstm_step_nn(var_tree, cell_vars[i+1], output_vars[i+1],
                        input_h_vars[i], input_i_vars[i], input_o_vars[i],
                        cell_vars[i], output_vars[i], mask_vars[i]);
                 }
             }
         } else {
-            for (int i = 0; i < feat_t.size(0); ++i) {
+            for (int i = 0; i < nframes; ++i) {
                 if (i == 0) {
-                    (*step)(var_tree, nullptr, nullptr,
+                    make_dyer_lstm_step_nn(var_tree, nullptr, nullptr,
                        input_h_vars[i], input_i_vars[i], input_o_vars[i],
                        cell_vars[i], output_vars[i], mask_vars[i]);
                 } else {
-                    (*step)(var_tree, cell_vars[i-1], output_vars[i-1],
+                    make_dyer_lstm_step_nn(var_tree, cell_vars[i-1], output_vars[i-1],
                        input_h_vars[i], input_i_vars[i], input_o_vars[i],
                        cell_vars[i], output_vars[i], mask_vars[i]);
                 }
@@ -292,6 +495,7 @@ namespace lstm {
 
         return std::make_pair(output, mask);
     }
+#endif
 
     input_dropout_transcriber::input_dropout_transcriber(
         std::shared_ptr<transcriber> base,
@@ -303,13 +507,16 @@ namespace lstm {
     std::pair<std::shared_ptr<autodiff::op_t>,
         std::shared_ptr<autodiff::op_t>>
     input_dropout_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> const& feat,
         std::shared_ptr<autodiff::op_t> const& mask) const
     {
         auto d_mask = autodiff::dropout_mask(feat, prob, gen);
 
-        return (*base)(var_tree, autodiff::emul(feat, d_mask), mask);
+        return (*base)(nframes, batch_size, cell_dim, var_tree, autodiff::emul(feat, d_mask), mask);
     }
 
     output_dropout_transcriber::output_dropout_transcriber(
@@ -322,6 +529,9 @@ namespace lstm {
     std::pair<std::shared_ptr<autodiff::op_t>,
         std::shared_ptr<autodiff::op_t>>
     output_dropout_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> const& feat,
         std::shared_ptr<autodiff::op_t> const& mask) const
@@ -329,7 +539,7 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> output;
         std::shared_ptr<autodiff::op_t> o_mask;
 
-        std::tie(output, o_mask) = (*base)(var_tree, feat, mask);
+        std::tie(output, o_mask) = (*base)(nframes, batch_size, cell_dim, var_tree, feat, mask);
 
         auto d_mask = autodiff::dropout_mask(output, prob, gen);
 
@@ -344,6 +554,9 @@ namespace lstm {
     std::pair<std::shared_ptr<autodiff::op_t>,
         std::shared_ptr<autodiff::op_t>>
     bi_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> const& feat,
         std::shared_ptr<autodiff::op_t> const& mask) const
@@ -353,8 +566,8 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> b_mask;
         std::shared_ptr<autodiff::op_t> b_output;
 
-        std::tie(f_output, f_mask) = (*f_base)(var_tree->children[0], feat, mask);
-        std::tie(b_output, b_mask) = (*b_base)(var_tree->children[1], feat, mask);
+        std::tie(f_output, f_mask) = (*f_base)(nframes, batch_size, cell_dim, var_tree->children[0], feat, mask);
+        std::tie(b_output, b_mask) = (*b_base)(nframes, batch_size, cell_dim, var_tree->children[1], feat, mask);
 
         auto h = autodiff::mul(f_output, tensor_tree::get_var(var_tree->children[2]));
 
@@ -372,6 +585,9 @@ namespace lstm {
     std::pair<std::shared_ptr<autodiff::op_t>,
         std::shared_ptr<autodiff::op_t>>
     layered_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> const& feat,
         std::shared_ptr<autodiff::op_t> const& mask) const
@@ -380,7 +596,7 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> o_mask = mask;
 
         for (int i = 0; i < layer.size(); ++i) {
-            std::tie(output, o_mask) = (*layer[i])(var_tree->children[i], output, o_mask);
+            std::tie(output, o_mask) = (*layer[i])(nframes, batch_size, cell_dim, var_tree->children[i], output, o_mask);
         }
 
         return std::make_pair(output, o_mask);
@@ -394,6 +610,9 @@ namespace lstm {
     std::pair<std::shared_ptr<autodiff::op_t>,
         std::shared_ptr<autodiff::op_t>>
     logsoftmax_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> const& feat,
         std::shared_ptr<autodiff::op_t> const& mask) const
@@ -405,7 +624,7 @@ namespace lstm {
             output = feat;
             o_mask = mask;
         } else {
-            std::tie(output, o_mask) = (*base)(var_tree->children[0], feat, mask);
+            std::tie(output, o_mask) = (*base)(nframes, batch_size, cell_dim, var_tree->children[0], feat, mask);
         }
 
         auto h = autodiff::mul(output, tensor_tree::get_var(var_tree->children[1]));
@@ -425,13 +644,16 @@ namespace lstm {
     std::pair<std::shared_ptr<autodiff::op_t>,
         std::shared_ptr<autodiff::op_t>>
     res_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> const& feat,
         std::shared_ptr<autodiff::op_t> const& mask) const
     {
         std::shared_ptr<autodiff::op_t> output;
         std::shared_ptr<autodiff::op_t> o_mask;
-        std::tie(output, o_mask) = (*base)(var_tree, feat, mask);
+        std::tie(output, o_mask) = (*base)(nframes, batch_size, cell_dim, var_tree, feat, mask);
 
         return std::make_pair(autodiff::add(output, feat), o_mask);
     }
@@ -444,13 +666,16 @@ namespace lstm {
     std::pair<std::shared_ptr<autodiff::op_t>,
         std::shared_ptr<autodiff::op_t>>
     subsampled_transcriber::operator()(
+        int nframes,
+        int batch_size,
+        int cell_dim,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> const& feat,
         std::shared_ptr<autodiff::op_t> const& mask) const
     {
         std::shared_ptr<autodiff::op_t> output;
         std::shared_ptr<autodiff::op_t> o_mask;
-        std::tie(output, o_mask) = (*base)(var_tree, feat, mask);
+        std::tie(output, o_mask) = (*base)(nframes, batch_size, cell_dim, var_tree, feat, mask);
 
         std::vector<std::shared_ptr<autodiff::op_t>> output_vars = split_rows(output);
         std::vector<std::shared_ptr<autodiff::op_t>> o_mask_vars;

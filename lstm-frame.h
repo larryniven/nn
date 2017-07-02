@@ -10,10 +10,18 @@ namespace lstm_frame {
 
     std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer);
 
+    std::shared_ptr<tensor_tree::vertex> make_dyer_tensor_tree(int layer);
+
     std::shared_ptr<tensor_tree::vertex> make_uni_tensor_tree(int layer);
 
     std::shared_ptr<lstm::transcriber>
     make_transcriber(
+        int layer,
+        double dropout,
+        std::default_random_engine *gen);
+
+    std::shared_ptr<lstm::transcriber>
+    make_dyer_transcriber(
         int layer,
         double dropout,
         std::default_random_engine *gen);
