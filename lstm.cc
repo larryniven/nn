@@ -499,6 +499,7 @@ namespace lstm {
         }
 
         result.feat = autodiff::row_cat(subsamp_feat);
+        result.nframes = subsamp_feat.size();
 
         if (result.mask != nullptr) {
             result.mask = autodiff::row_cat(subsamp_mask);
