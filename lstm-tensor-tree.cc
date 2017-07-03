@@ -21,27 +21,6 @@ namespace lstm {
 
     std::shared_ptr<tensor_tree::vertex> dyer_lstm_tensor_tree_factory::operator()() const
     {
-#if 0
-        tensor_tree::vertex root { "nil" };
-
-        // 0
-        root.children.push_back(tensor_tree::make_tensor("input -> hidden"));
-        root.children.push_back(tensor_tree::make_tensor("output -> hidden"));
-        root.children.push_back(tensor_tree::make_tensor("hidden bias"));
-
-        // 3
-        root.children.push_back(tensor_tree::make_tensor("input -> input gate"));
-        root.children.push_back(tensor_tree::make_tensor("output -> input gate"));
-        root.children.push_back(tensor_tree::make_tensor("input gate peep"));
-        root.children.push_back(tensor_tree::make_tensor("input gate bias"));
-
-        // 7
-        root.children.push_back(tensor_tree::make_tensor("input -> output gate"));
-        root.children.push_back(tensor_tree::make_tensor("output -> output gate"));
-        root.children.push_back(tensor_tree::make_tensor("output gate peep"));
-        root.children.push_back(tensor_tree::make_tensor("output gate bias"));
-#endif
-
         tensor_tree::vertex root { "nil" };
 
         root.children.push_back(tensor_tree::make_tensor("input -> all"));

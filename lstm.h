@@ -43,52 +43,35 @@ namespace lstm {
         int batch_size,
         int cell_dim);
 
-#if 0
-    lstm_step_nn_t make_dyer_lstm_step_nn(std::shared_ptr<tensor_tree::vertex> var_tree,
-        std::shared_ptr<autodiff::op_t> prev_cell,
-        std::shared_ptr<autodiff::op_t> prev_output,
-        std::shared_ptr<autodiff::op_t> input_h,
-        std::shared_ptr<autodiff::op_t> input_i,
-        std::shared_ptr<autodiff::op_t> input_o,
-        std::shared_ptr<autodiff::op_t> cell,
-        std::shared_ptr<autodiff::op_t> output,
-        std::shared_ptr<autodiff::op_t> cell_mask = nullptr);
-#endif
-
     // tanscriber
+
+    struct trans_seq_t {
+        int nframes;
+        int batch_size;
+        int dim;
+        std::shared_ptr<autodiff::op_t> feat;
+        std::shared_ptr<autodiff::op_t> mask;
+    };
 
     struct transcriber {
         virtual ~transcriber();
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const = 0;
+            trans_seq_t const& seq) const = 0;
     };
 
     struct lstm_transcriber
         : public transcriber {
 
+        int cell_dim;
         bool reverse;
 
-        lstm_transcriber(bool reverse = false);
+        lstm_transcriber(int cell_dim, bool reverse = false);
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
+            trans_seq_t const& seq) const override;
 
     };
 
@@ -98,27 +81,19 @@ namespace lstm {
     struct dyer_lstm_transcriber
         : public transcriber {
 
+        int cell_dim;
         bool reverse;
 
-        dyer_lstm_transcriber(bool reverse = false);
+        dyer_lstm_transcriber(int cell_dim, bool reverse = false);
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
+            trans_seq_t const& seq) const override;
 
     };
 
     struct input_dropout_transcriber
         : public transcriber {
-
-        mutable std::shared_ptr<autodiff::op_t> debug;
 
         std::shared_ptr<transcriber> base;
         double prob;
@@ -127,16 +102,9 @@ namespace lstm {
         input_dropout_transcriber(std::shared_ptr<transcriber> base,
             double prob, std::default_random_engine& gen);
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
+            trans_seq_t const& seq) const override;
 
     };
 
@@ -150,38 +118,25 @@ namespace lstm {
         output_dropout_transcriber(std::shared_ptr<transcriber> base,
             double prob, std::default_random_engine& gen);
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
-
+            trans_seq_t const& seq) const override;
     };
 
     struct bi_transcriber
         : public transcriber {
 
+        int output_dim;
+
         std::shared_ptr<transcriber> f_base;
         std::shared_ptr<transcriber> b_base;
 
-        bi_transcriber(std::shared_ptr<transcriber> f_base,
+        bi_transcriber(int output_dim, std::shared_ptr<transcriber> f_base,
             std::shared_ptr<transcriber> b_base);
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
+            trans_seq_t const& seq) const override;
     };
 
     struct layered_transcriber
@@ -189,37 +144,23 @@ namespace lstm {
 
         std::vector<std::shared_ptr<transcriber>> layer;
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
-
+            trans_seq_t const& seq) const override;
     };
 
     struct logsoftmax_transcriber
         : public transcriber {
 
+        int output_dim;
+
         std::shared_ptr<transcriber> base;
 
-        logsoftmax_transcriber(std::shared_ptr<transcriber> base);
+        logsoftmax_transcriber(int output_dim, std::shared_ptr<transcriber> base);
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
-
+            trans_seq_t const& seq) const override;
     };
 
     struct res_transcriber
@@ -229,17 +170,9 @@ namespace lstm {
 
         res_transcriber(std::shared_ptr<transcriber> base);
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
-
+            trans_seq_t const& seq) const override;
     };
 
     struct subsampled_transcriber
@@ -251,16 +184,9 @@ namespace lstm {
 
         subsampled_transcriber(int freq, int shift, std::shared_ptr<transcriber> base);
 
-        virtual
-        std::pair<std::shared_ptr<autodiff::op_t>,
-            std::shared_ptr<autodiff::op_t>>
-        operator()(
-            int nframes,
-            int batch_size,
-            int cell_dim,
+        virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
-            std::shared_ptr<autodiff::op_t> const& feat,
-            std::shared_ptr<autodiff::op_t> const& mask = nullptr) const override;
+            trans_seq_t const& seq) const override;
     };
 
 }

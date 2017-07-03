@@ -12,43 +12,19 @@ namespace lstm_frame {
 
     std::shared_ptr<tensor_tree::vertex> make_dyer_tensor_tree(int layer);
 
-    std::shared_ptr<tensor_tree::vertex> make_uni_tensor_tree(int layer);
-
     std::shared_ptr<lstm::transcriber>
     make_transcriber(
-        int layer,
+        std::shared_ptr<tensor_tree::vertex> param,
         double dropout,
-        std::default_random_engine *gen);
+        std::default_random_engine *gen,
+        bool pyramid);
 
     std::shared_ptr<lstm::transcriber>
     make_dyer_transcriber(
-        int layer,
+        std::shared_ptr<tensor_tree::vertex> param,
         double dropout,
-        std::default_random_engine *gen);
-
-    std::shared_ptr<lstm::transcriber>
-    make_res_transcriber(
-        int layer,
-        double dropout,
-        std::default_random_engine *gen);
-
-    std::shared_ptr<lstm::transcriber>
-    make_uni_transcriber(
-        int layer,
-        double dropout,
-        std::default_random_engine *gen);
-
-    std::shared_ptr<lstm::transcriber>
-    make_pyramid_transcriber(
-        int layer,
-        double dropout,
-        std::default_random_engine *gen);
-
-    std::shared_ptr<lstm::transcriber>
-    make_dyer_pyramid_transcriber(
-        int layer,
-        double dropout,
-        std::default_random_engine *gen);
+        std::default_random_engine *gen,
+        bool pyramid);
 
 }
 
