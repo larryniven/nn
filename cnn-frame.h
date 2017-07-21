@@ -6,18 +6,21 @@
 
 namespace cnn {
 
+    struct layer_t {
+        std::string type;
+        std::shared_ptr<void> data;
+    };
+
+    struct cnn_t {
+        std::vector<layer_t> layers;
+        std::shared_ptr<tensor_tree::vertex> param;
+    };
+
     std::shared_ptr<tensor_tree::vertex> make_cnn_tensor_tree(int layer);
 
     std::shared_ptr<tensor_tree::vertex> make_densenet_tensor_tree(int layer);
 
-    struct cnn_t {
-        int conv_layer;
-        int fc_layer;
-        std::vector<std::pair<int, int>> dilation;
-        std::shared_ptr<tensor_tree::vertex> param;
-    };
-
-    std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int conv_layer, int fc_layer);
+    std::shared_ptr<tensor_tree::vertex> make_tensor_tree(cnn_t const& config);
 
     cnn_t load_param(std::istream& is);
     void save_param(cnn_t& param, std::ostream& os);

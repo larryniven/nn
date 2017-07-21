@@ -31,63 +31,73 @@ namespace cnn {
         return std::make_shared<tensor_tree::vertex>(root);
     }
 
-    std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int conv_layer, int fc_layer)
+    std::shared_ptr<tensor_tree::vertex> make_tensor_tree(cnn_t const& config)
     {
-        std::shared_ptr<tensor_tree::vertex> root = make_cnn_tensor_tree(conv_layer);
+        tensor_tree::vertex root { "nil" };
     
-        for (int i = 0; i < fc_layer; ++i) {
-            tensor_tree::vertex t { "nil" };
+        for (int i = 0; i < config.layers.size(); ++i) {
+            if (config.layers[i].type == "conv") {
+                tensor_tree::vertex conv { "nil" };
+                conv.children.push_back(tensor_tree::make_tensor("conv weight"));
+                conv.children.push_back(tensor_tree::make_tensor("conv bias"));
+                root.children.push_back(std::make_shared<tensor_tree::vertex>(conv));
+            } else if (config.layers[i].type == "fc") {
+                tensor_tree::vertex fc { "nil" };
 
-            t.children.push_back(tensor_tree::make_tensor("softmax weight"));
-            t.children.push_back(tensor_tree::make_tensor("softmax bias"));
+                fc.children.push_back(tensor_tree::make_tensor("weight"));
+                fc.children.push_back(tensor_tree::make_tensor("bias"));
 
-            root->children.push_back(std::make_shared<tensor_tree::vertex>(t));
+                root.children.push_back(std::make_shared<tensor_tree::vertex>(fc));
+            } else if (config.layers[i].type == "framewise-fc") {
+                tensor_tree::vertex fc { "nil" };
+
+                fc.children.push_back(tensor_tree::make_tensor("weight"));
+                fc.children.push_back(tensor_tree::make_tensor("bias"));
+
+                root.children.push_back(std::make_shared<tensor_tree::vertex>(fc));
+            }
         }
     
-        tensor_tree::vertex t { "nil" };
-
-        t.children.push_back(tensor_tree::make_tensor("softmax weight"));
-        t.children.push_back(tensor_tree::make_tensor("softmax bias"));
-
-        root->children.push_back(std::make_shared<tensor_tree::vertex>(t));
-
-        return root;
+        return std::make_shared<tensor_tree::vertex>(root);
     }
 
     cnn_t load_param(std::istream& is)
     {
         std::string line;
 
-        if (!std::getline(is, line)) {
-            std::cout << "fail to parse the number of conv layers" << std::endl;
-            exit(1);
-        }
-
         cnn_t result;
 
-        result.conv_layer = std::stoi(line);
-
-        for (int i = 0; i < result.conv_layer; ++i) {
-            if (!std::getline(is, line)) {
-                std::cout << "fail to parse dilation parameters" << std::endl;
-                exit(1);
+        while (std::getline(is, line) && line != "#") {
+            if (ebt::startswith(line, "conv")) {
+                auto parts = ebt::split(line);
+                layer_t ell { "conv" };
+                assert(parts.size() == 5);
+                ell.data = std::make_shared<std::tuple<int, int, int, int>>(
+                    std::make_tuple(std::stoi(parts[1]), std::stoi(parts[2]),
+                    std::stoi(parts[4]), std::stoi(parts[4])));
+                result.layers.push_back(ell);
+            } else if (ebt::startswith(line, "max-pooling")) {
+                auto parts = ebt::split(line);
+                layer_t ell { "max-pooling" };
+                assert(parts.size() == 5);
+                ell.data = std::make_shared<std::tuple<int, int, int, int>>(
+                    std::make_tuple(std::stoi(parts[1]), std::stoi(parts[2]),
+                    std::stoi(parts[3]), std::stoi(parts[4])));
+                result.layers.push_back(ell);
+            } else if (ebt::startswith(line, "fc")) {
+                result.layers.push_back(layer_t { "fc" });
+            } else if (ebt::startswith(line, "framewise-fc")) {
+                result.layers.push_back(layer_t { "framewise-fc" });
+            } else if (ebt::startswith(line, "relu")) {
+                result.layers.push_back(layer_t { "relu" });
+            } else if (ebt::startswith(line, "logsoftmax")) {
+                result.layers.push_back(layer_t { "logsoftmax" });
+            } else {
+                throw std::logic_error("unable to parse: " + line);
             }
-
-            std::vector<std::string> parts = ebt::split(line);
-
-            assert(parts.size() == 2);
-
-            result.dilation.push_back(std::make_pair(std::stoi(parts[0]), std::stoi(parts[1])));
         }
 
-        if (!std::getline(is, line)) {
-            std::cout << "fail to parse the number of fc layers" << std::endl;
-            exit(1);
-        }
-
-        result.fc_layer = std::stoi(line);
-
-        result.param = make_tensor_tree(result.conv_layer, result.fc_layer);
+        result.param = make_tensor_tree(result);
         tensor_tree::load_tensor(result.param, is);
 
         return result;
@@ -95,37 +105,89 @@ namespace cnn {
 
     void save_param(cnn_t& config, std::ostream& os)
     {
-        os << config.conv_layer << std::endl;
+        for (int i = 0; i < config.layers.size(); ++i) {
+            auto& ell = config.layers[i];
 
-        for (int i = 0; i < config.conv_layer; ++i) {
-            os << config.dilation[i].first << " " << config.dilation[i].second << std::endl;
+            if (ell.type == "conv") {
+                auto& t = *std::static_pointer_cast<std::tuple<int, int, int, int>>(ell.data);
+                os << "conv " << std::get<0>(t) << " " << std::get<1>(t)
+                    << " " << std::get<2>(t) << " " << std::get<3>(t) << std::endl;
+            } else if (ell.type == "max-pooling") {
+                std::tuple<int, int, int, int> t = *std::static_pointer_cast<
+                    std::tuple<int, int, int, int>>(ell.data);
+                os << "max-pooling " << std::get<0>(t)
+                    << " " << std::get<1>(t) << " " << std::get<2>(t)
+                    << " " << std::get<3>(t) << std::endl;
+            } else if (ell.type == "fc") {
+                os << "fc" << std::endl;
+            } else if (ell.type == "framewise-fc") {
+                os << "framewise-fc" << std::endl;
+            } else if (ell.type == "relu") {
+                os << "relu" << std::endl;
+            } else if (ell.type == "logsoftmax") {
+                os << "logsoftmax" << std::endl;
+            } else {
+                throw std::logic_error("unable to parse: " + ell.type);
+            }
         }
 
-        os << config.fc_layer << std::endl;
+        os << "#" << std::endl;
 
         tensor_tree::save_tensor(config.param, os);
     }
 
     std::shared_ptr<transcriber>
-    make_transcriber(cnn_t const& cnn_config, double dropout, std::default_random_engine *gen)
+    make_transcriber(cnn_t const& config, double dropout, std::default_random_engine *gen)
     {
         cnn::multilayer_transcriber multi_trans;
 
-        for (int i = 0; i < cnn_config.conv_layer; ++i) {
-            auto t = std::make_shared<cnn_transcriber>(
-                cnn_transcriber { cnn_config.dilation[i].first, cnn_config.dilation[i].second });
+        for (int i = 0; i < config.layers.size(); ++i) {
+            auto& ell = config.layers[i];
 
-            multi_trans.layers.push_back(t);
-        }
+            if (ell.type == "conv") {
+                auto& d = *std::static_pointer_cast<std::tuple<int, int, int, int>>(ell.data);
 
-        for (int i = 0; i < cnn_config.fc_layer; ++i) {
-            auto t = std::make_shared<fc_transcriber>(fc_transcriber{}); 
+                auto t = std::make_shared<conv_transcriber>(
+                    conv_transcriber { std::get<0>(d), std::get<1>(d),
+                    std::get<2>(d), std::get<3>(d) });
 
-            if (dropout == 0.0) {
+                multi_trans.layers.push_back(t);
+
+            } else if (ell.type == "max-pooling") {
+                auto& d = *std::static_pointer_cast<std::tuple<int, int, int, int>>(ell.data);
+
+                auto t = std::make_shared<max_pooling_transcriber>(
+                    max_pooling_transcriber { std::get<0>(d), std::get<1>(d),
+                    std::get<2>(d), std::get<3>(d) });
+
+                multi_trans.layers.push_back(t);
+
+            } else if (ell.type == "fc") {
+                auto t = std::make_shared<fc_transcriber>(fc_transcriber{}); 
+
+                multi_trans.layers.push_back(t);
+
+                if (dropout != 0.0) {
+                    multi_trans.layers.push_back(std::make_shared<dropout_transcriber>(
+                        dropout_transcriber {dropout, *gen}));
+                }
+            } else if (ell.type == "framewise-fc") {
+                auto t = std::make_shared<framewise_fc_transcriber>(framewise_fc_transcriber{}); 
+
+                multi_trans.layers.push_back(t);
+
+                if (dropout != 0.0) {
+                    multi_trans.layers.push_back(std::make_shared<dropout_transcriber>(
+                        dropout_transcriber {dropout, *gen}));
+                }
+            } else if (ell.type == "relu") {
+                auto t = std::make_shared<relu_transcriber>(relu_transcriber {});
+                multi_trans.layers.push_back(t);
+            } else if (ell.type == "logsoftmax") {
+                auto t = std::make_shared<logsoftmax_transcriber>(logsoftmax_transcriber {});
                 multi_trans.layers.push_back(t);
             } else {
-                multi_trans.layers.push_back(std::make_shared<dropout_transcriber>(
-                    dropout_transcriber {t, dropout, *gen}));
+                throw std::logic_error("unknown layer type: " + ell.type);
             }
         }
 
