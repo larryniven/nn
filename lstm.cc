@@ -429,10 +429,10 @@ namespace lstm {
 
         auto h = autodiff::mul(seq.feat, tensor_tree::get_var(var_tree->children[0]));
 
-        result.feat = autodiff::logsoftmax(autodiff::add(
+        result.feat = autodiff::add(
             h,
             autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[1]), h)
-        ));
+        );
 
         return result;
     }
