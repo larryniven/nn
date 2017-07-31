@@ -19,8 +19,12 @@ namespace lstm_frame {
         };
 
         result.children.push_back(factory());
-        result.children.push_back(tensor_tree::make_tensor("softmax weight"));
-        result.children.push_back(tensor_tree::make_tensor("softmax bias"));
+
+        tensor_tree::vertex fc { "nil" };
+        fc.children.push_back(tensor_tree::make_tensor("softmax weight"));
+        fc.children.push_back(tensor_tree::make_tensor("softmax bias"));
+
+        result.children.push_back(std::make_shared<tensor_tree::vertex>(fc));
 
         return std::make_shared<tensor_tree::vertex>(result);
     }
@@ -39,8 +43,12 @@ namespace lstm_frame {
         };
 
         result.children.push_back(factory());
-        result.children.push_back(tensor_tree::make_tensor("softmax weight"));
-        result.children.push_back(tensor_tree::make_tensor("softmax bias"));
+
+        tensor_tree::vertex fc { "nil" };
+        fc.children.push_back(tensor_tree::make_tensor("softmax weight"));
+        fc.children.push_back(tensor_tree::make_tensor("softmax bias"));
+
+        result.children.push_back(std::make_shared<tensor_tree::vertex>(fc));
 
         return std::make_shared<tensor_tree::vertex>(result);
     }
@@ -83,12 +91,12 @@ namespace lstm_frame {
                 lstm::bi_transcriber { (int) tensor_tree::get_tensor(param->children[0]
                     ->children[i]->children[2]).size(1), f_trans, b_trans });
 
-            if (pyramid && i != layer - 1) {
-                trans = std::make_shared<lstm::subsampled_transcriber>(
-                    lstm::subsampled_transcriber { 2, 0, trans });
-            }
-
             result.layer.push_back(trans);
+
+            if (pyramid && i != layer - 1) {
+                result.layer.push_back(std::make_shared<lstm::subsampled_transcriber>(
+                    lstm::subsampled_transcriber { 2, 0 }));
+            }
         }
 
         return std::make_shared<lstm::layered_transcriber>(result);
@@ -132,12 +140,12 @@ namespace lstm_frame {
                 lstm::bi_transcriber { (int) tensor_tree::get_tensor(param->children[0]
                     ->children[i]->children[2]).size(1), f_trans, b_trans });
 
-            if (pyramid && i != layer - 1) {
-                trans = std::make_shared<lstm::subsampled_transcriber>(
-                    lstm::subsampled_transcriber { 2, 0, trans });
-            }
-
             result.layer.push_back(trans);
+
+            if (pyramid && i != layer - 1) {
+                result.layer.push_back(std::make_shared<lstm::subsampled_transcriber>(
+                    lstm::subsampled_transcriber { 2, 0 }));
+            }
         }
 
         return std::make_shared<lstm::layered_transcriber>(result);

@@ -119,6 +119,11 @@ namespace lstm {
     transcriber::~transcriber()
     {}
 
+    bool transcriber::require_param() const
+    {
+        return true;
+    }
+
     lstm_transcriber::lstm_transcriber(int cell_dim, bool reverse)
         : cell_dim(cell_dim), reverse(reverse)
     {}
@@ -217,24 +222,6 @@ namespace lstm {
         }
 
         result.feat = autodiff::weak_cat(outputs, output_storage);
-
-        return result;
-    }
-
-    // eager only
-    std::vector<std::shared_ptr<autodiff::op_t>> split_rows(
-        std::shared_ptr<autodiff::op_t> t)
-    {
-        auto& v = autodiff::get_output<la::tensor_like<double>>(t);
-        std::vector<std::shared_ptr<autodiff::op_t>> result;
-
-        std::vector<unsigned int> sizes = v.sizes();
-        std::vector<unsigned int> new_sizes { sizes.begin() + 1, sizes.end() };
-        int new_vec_size = v.vec_size() / v.size(0);
-
-        for (int i = 0; i < v.size(0); ++i) {
-            result.push_back(autodiff::weak_var(t, new_vec_size * i, new_sizes));
-        }
 
         return result;
     }
@@ -415,39 +402,52 @@ namespace lstm {
     {
         trans_seq_t result = seq;
 
+        int j = 0;
         for (int i = 0; i < layer.size(); ++i) {
-            result = (*layer[i])(var_tree->children[i], result);
+            if (layer[i]->require_param()) {
+                result = (*layer[i])(var_tree->children[j], result);
+                ++j;
+            } else {
+                result = (*layer[i])(nullptr, result);
+            }
         }
 
         return result;
     }
 
-    logsoftmax_transcriber::logsoftmax_transcriber(
-        int output_dim,
-        std::shared_ptr<transcriber> base)
-        : output_dim(output_dim), base(base)
+    fc_transcriber::fc_transcriber(
+        int output_dim)
+        : output_dim(output_dim)
     {}
+
+    trans_seq_t fc_transcriber::operator()(
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        trans_seq_t const& seq) const
+    {
+        trans_seq_t result = seq;
+        result.dim = output_dim;
+
+        auto h = autodiff::mul(seq.feat, tensor_tree::get_var(var_tree->children[0]));
+
+        result.feat = autodiff::logsoftmax(autodiff::add(
+            h,
+            autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[1]), h)
+        ));
+
+        return result;
+    }
+
+    bool logsoftmax_transcriber::require_param() const
+    {
+        return false;
+    }
 
     trans_seq_t logsoftmax_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
         trans_seq_t const& seq) const
     {
-        trans_seq_t result;
-
-        if (base == nullptr) {
-            result = seq;
-        } else {
-            result = (*base)(var_tree->children[0], seq);
-        }
-
-        auto h = autodiff::mul(result.feat, tensor_tree::get_var(var_tree->children[1]));
-
-        result.feat = autodiff::logsoftmax(autodiff::add(
-            h,
-            autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[2]), h)
-        ));
-
-        result.dim = output_dim;
+        trans_seq_t result = seq;
+        result.feat = autodiff::logsoftmax(seq.feat);
 
         return result;
     }
@@ -468,40 +468,47 @@ namespace lstm {
     }
 
     subsampled_transcriber::subsampled_transcriber(
-        int freq, int shift, std::shared_ptr<transcriber> base)
-        : freq(freq), shift(shift), base(base)
+        int freq, int shift)
+        : freq(freq), shift(shift)
     {}
+
+    bool subsampled_transcriber::require_param() const
+    {
+        return false;
+    }
 
     trans_seq_t subsampled_transcriber::operator()(
         std::shared_ptr<tensor_tree::vertex> var_tree,
         trans_seq_t const& seq) const
     {
-        trans_seq_t result = (*base)(var_tree, seq);
-
         std::vector<std::shared_ptr<autodiff::op_t>> subsamp_feat;
         std::vector<std::shared_ptr<autodiff::op_t>> subsamp_mask;
 
-        unsigned int ubatch_size = result.batch_size;
-        unsigned int udim = result.dim;
+        unsigned int ubatch_size = seq.batch_size;
+        unsigned int udim = seq.dim;
 
-        for (int i = 0; i < result.nframes; ++i) {
+        for (int i = 0; i < seq.nframes; ++i) {
             if ((i - shift) % freq == 0) {
-                subsamp_feat.push_back(autodiff::weak_var(result.feat,
-                    i * result.batch_size * result.dim,
+                subsamp_feat.push_back(autodiff::weak_var(seq.feat,
+                    i * seq.batch_size * seq.dim,
                     std::vector<unsigned int> { ubatch_size, udim }));
 
-                if (result.mask != nullptr) {
-                    subsamp_mask.push_back(autodiff::weak_var(result.mask,
-                        i * result.batch_size,
+                if (seq.mask != nullptr) {
+                    subsamp_mask.push_back(autodiff::weak_var(seq.mask,
+                        i * seq.batch_size,
                         std::vector<unsigned int> { ubatch_size }));
                 }
             }
         }
 
+        trans_seq_t result;
+
+        result.batch_size = seq.batch_size;
+        result.dim = seq.dim;
         result.feat = autodiff::row_cat(subsamp_feat);
         result.nframes = subsamp_feat.size();
 
-        if (result.mask != nullptr) {
+        if (seq.mask != nullptr) {
             result.mask = autodiff::row_cat(subsamp_mask);
         }
 

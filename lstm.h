@@ -56,6 +56,8 @@ namespace lstm {
     struct transcriber {
         virtual ~transcriber();
 
+        virtual bool require_param() const;
+
         virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
             trans_seq_t const& seq) const = 0;
@@ -74,9 +76,6 @@ namespace lstm {
             trans_seq_t const& seq) const override;
 
     };
-
-    std::vector<std::shared_ptr<autodiff::op_t>> split_rows(
-        std::shared_ptr<autodiff::op_t> t);
 
     struct dyer_lstm_transcriber
         : public transcriber {
@@ -149,14 +148,22 @@ namespace lstm {
             trans_seq_t const& seq) const override;
     };
 
-    struct logsoftmax_transcriber
+    struct fc_transcriber
         : public transcriber {
 
         int output_dim;
 
-        std::shared_ptr<transcriber> base;
+        fc_transcriber(int output_dim);
 
-        logsoftmax_transcriber(int output_dim, std::shared_ptr<transcriber> base);
+        virtual trans_seq_t operator()(
+            std::shared_ptr<tensor_tree::vertex> var_tree,
+            trans_seq_t const& seq) const override;
+    };
+
+    struct logsoftmax_transcriber
+        : public transcriber {
+
+        virtual bool require_param() const;
 
         virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
@@ -180,9 +187,10 @@ namespace lstm {
 
         int freq;
         int shift;
-        std::shared_ptr<transcriber> base;
 
-        subsampled_transcriber(int freq, int shift, std::shared_ptr<transcriber> base);
+        subsampled_transcriber(int freq, int shift);
+
+        virtual bool require_param() const override;
 
         virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
