@@ -20,11 +20,17 @@ namespace lstm {
     {
         lstm_step_nn_t result;
 
-        auto pre_gates = autodiff::add(
-            std::vector<std::shared_ptr<autodiff::op_t>> {
-                input,
-                autodiff::mul(prev_output, output_weight)
-            });
+        std::shared_ptr<autodiff::op_t> pre_gates;
+
+        if (prev_output == nullptr) {
+            pre_gates = input;
+        } else {
+            pre_gates = autodiff::add(
+                std::vector<std::shared_ptr<autodiff::op_t>> {
+                    input,
+                    autodiff::mul(prev_output, output_weight)
+                });
+        }
 
         unsigned int ubatch_size = batch_size;
         unsigned int ucell_dim = cell_dim;
@@ -39,11 +45,18 @@ namespace lstm {
             std::vector<unsigned int> { ubatch_size, ucell_dim });
 
         auto g = autodiff::tanh(pre_g);
-        result.input_gate = autodiff::logistic(autodiff::add(pre_i, autodiff::emul(prev_cell, cell2i)));
-        result.forget_gate = autodiff::logistic(autodiff::add(pre_f, autodiff::emul(prev_cell, cell2f)));
-
-        result.cell = autodiff::add(autodiff::emul(result.input_gate, g),
-            autodiff::emul(result.forget_gate, prev_cell));
+        if (prev_cell == nullptr) {
+            result.input_gate = autodiff::logistic(pre_i);
+            result.forget_gate = autodiff::logistic(pre_f);
+            result.cell = autodiff::emul(result.input_gate, g);
+        } else {
+            result.input_gate = autodiff::logistic(autodiff::add(pre_i,
+                autodiff::emul(prev_cell, cell2i)));
+            result.forget_gate = autodiff::logistic(autodiff::add(pre_f,
+                autodiff::emul(prev_cell, cell2f)));
+            result.cell = autodiff::add(autodiff::emul(result.input_gate, g),
+                autodiff::emul(result.forget_gate, prev_cell));
+        }
 
         if (cell_mask != nullptr) {
             result.cell = autodiff::emul(result.cell,
