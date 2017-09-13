@@ -42,20 +42,28 @@ namespace seq2seq {
     
         for (int i = 0; i < labels.size(); ++i) {
             // c = attent(output, hidden, nhidden);
+
             auto output_col = autodiff::weak_var(output, 0,
                 std::vector<unsigned int> { (unsigned int) cell_dim, 1 });
             auto attention = autodiff::weak_var(autodiff::mul(hidden, output_col), 0,
                 std::vector<unsigned int> { (unsigned int) nhidden });
+            
+            result.attentions.push_back(attention);
+            
             auto c = autodiff::mul(attention, hidden);
 
             std::shared_ptr<autodiff::op_t> pred_embedding = c;
     
             // TODO: inefficient
-            auto pred = autodiff::add(autodiff::row_at(pred_storage, i),
+            auto pred = autodiff::add_to(autodiff::row_at(pred_storage, i),
                 std::vector<std::shared_ptr<autodiff::op_t>> {
                     autodiff::logsoftmax(autodiff::add(tensor_tree::get_var(var_tree->children[4]),
                         autodiff::mul(pred_embedding, tensor_tree::get_var(var_tree->children[3]))))
                 });
+            // auto pred = autodiff::logsoftmax(autodiff::add(
+            //         tensor_tree::get_var(var_tree->children[4]),
+            //         autodiff::mul(pred_embedding, tensor_tree::get_var(var_tree->children[3]))
+            //     ));
     
             result.preds.push_back(pred);
     
@@ -86,6 +94,7 @@ namespace seq2seq {
         }
 
         result.pred = autodiff::weak_cat(result.preds, pred_storage);
+        // result.pred = autodiff::row_cat(result.preds);
 
         return result;
     }

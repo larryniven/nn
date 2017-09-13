@@ -61,7 +61,8 @@ namespace tensor_tree {
         std::string line;
         std::vector<std::shared_ptr<vertex>> order = leaves_pre_order(root);
 
-        for (auto& v: order) {
+        for (int i = 0; i < order.size(); ++i) {
+            auto& v = order[i];
             v->data = std::make_shared<la::cpu::tensor<double>>(
                 ebt::json::load<la::cpu::tensor<double>>(is));
             std::getline(is, line);

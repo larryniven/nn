@@ -11,6 +11,7 @@ namespace seq2seq {
     struct seq2seq_nn_t {
         std::shared_ptr<autodiff::op_t> pred;
         std::vector<std::shared_ptr<autodiff::op_t>> preds;
+        std::vector<std::shared_ptr<autodiff::op_t>> attentions;
     };
 
     seq2seq_nn_t make_training_nn(
