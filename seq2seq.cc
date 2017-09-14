@@ -20,13 +20,43 @@ namespace seq2seq {
         return std::make_shared<tensor_tree::vertex>(root);
     }
 
+    attention::~attention()
+    {}
+
+    std::shared_ptr<autodiff::op_t>
+    bilinear_attention::operator()(std::shared_ptr<autodiff::op_t> output,
+        std::shared_ptr<autodiff::op_t> hidden,
+        int nhidden,
+        int cell_dim)
+    {
+        auto output_col = autodiff::weak_var(output, 0,
+            std::vector<unsigned int> { (unsigned int) cell_dim, 1 });
+
+        return autodiff::weak_var(autodiff::mul(hidden, output_col), 0,
+            std::vector<unsigned int> { (unsigned int) nhidden });
+    }
+
+    std::shared_ptr<autodiff::op_t>
+    bilinear_softmax_attention::operator()(std::shared_ptr<autodiff::op_t> output,
+        std::shared_ptr<autodiff::op_t> hidden,
+        int nhidden,
+        int cell_dim)
+    {
+        auto output_col = autodiff::weak_var(output, 0,
+            std::vector<unsigned int> { (unsigned int) cell_dim, 1 });
+
+        return autodiff::softmax(autodiff::weak_var(autodiff::mul(hidden, output_col), 0,
+            std::vector<unsigned int> { (unsigned int) nhidden }));
+    }
+
     seq2seq_nn_t make_training_nn(
         std::vector<int> labels,
         int label_set_size,
         std::shared_ptr<autodiff::op_t> hidden,
         int nhidden,
         int cell_dim,
-        std::shared_ptr<tensor_tree::vertex> var_tree)
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        attention& att_func)
     {
         auto& comp_graph = *hidden->graph;
     
@@ -37,35 +67,30 @@ namespace seq2seq {
         pred_storage_t.resize(std::vector<unsigned int> { (unsigned int) labels.size(),
             (unsigned int) label_set_size });
         auto pred_storage = comp_graph.var(pred_storage_t);
+        std::vector<std::shared_ptr<autodiff::op_t>> preds;
 
         seq2seq_nn_t result;
     
         for (int i = 0; i < labels.size(); ++i) {
-            // c = attent(output, hidden, nhidden);
 
-            auto output_col = autodiff::weak_var(output, 0,
-                std::vector<unsigned int> { (unsigned int) cell_dim, 1 });
-            auto attention = autodiff::weak_var(autodiff::mul(hidden, output_col), 0,
-                std::vector<unsigned int> { (unsigned int) nhidden });
+            auto att = att_func(output, hidden, nhidden, cell_dim);
+
+            result.atts.push_back(att);
             
-            result.attentions.push_back(attention);
-            
-            auto c = autodiff::mul(attention, hidden);
+            auto c = autodiff::mul(att, hidden);
 
             std::shared_ptr<autodiff::op_t> pred_embedding = c;
     
             // TODO: inefficient
+            // one copy from logsoftmax to pred_storage can be eliminated
+            // but this needs a special logsoftmax_to operation
             auto pred = autodiff::add_to(autodiff::row_at(pred_storage, i),
                 std::vector<std::shared_ptr<autodiff::op_t>> {
                     autodiff::logsoftmax(autodiff::add(tensor_tree::get_var(var_tree->children[4]),
                         autodiff::mul(pred_embedding, tensor_tree::get_var(var_tree->children[3]))))
                 });
-            // auto pred = autodiff::logsoftmax(autodiff::add(
-            //         tensor_tree::get_var(var_tree->children[4]),
-            //         autodiff::mul(pred_embedding, tensor_tree::get_var(var_tree->children[3]))
-            //     ));
     
-            result.preds.push_back(pred);
+            preds.push_back(pred);
     
             auto input = autodiff::weak_var(autodiff::row_at(
                 tensor_tree::get_var(var_tree->children[2]), labels[i]),
@@ -93,8 +118,7 @@ namespace seq2seq {
             cell = lstm_step.cell;
         }
 
-        result.pred = autodiff::weak_cat(result.preds, pred_storage);
-        // result.pred = autodiff::row_cat(result.preds);
+        result.pred = autodiff::weak_cat(preds, pred_storage);
 
         return result;
     }
