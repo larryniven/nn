@@ -123,5 +123,81 @@ namespace seq2seq {
         return result;
     }
 
+    std::vector<int> decode(
+        std::vector<std::string> const& id_label,
+        std::shared_ptr<autodiff::op_t> hidden,
+        int nhidden,
+        int cell_dim,
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        attention& att_func)
+    {
+        std::vector<int> result;
+
+        auto& comp_graph = *hidden->graph;
+    
+        std::shared_ptr<autodiff::op_t> cell = tensor_tree::get_var(var_tree->children[5]);
+        std::shared_ptr<autodiff::op_t> output = autodiff::tanh(cell);
+    
+        std::vector<std::shared_ptr<autodiff::op_t>> preds;
+
+        while (result.size() == 0 || id_label[result.back()] != "<eos>") {
+
+            auto att = att_func(output, hidden, nhidden, cell_dim);
+
+            auto c = autodiff::mul(att, hidden);
+
+            std::shared_ptr<autodiff::op_t> pred_embedding = c;
+    
+            // TODO: inefficient
+            // one copy from logsoftmax to pred_storage can be eliminated
+            // but this needs a special logsoftmax_to operation
+            auto pred = autodiff::logsoftmax(autodiff::add(tensor_tree::get_var(var_tree->children[4]),
+                autodiff::mul(pred_embedding, tensor_tree::get_var(var_tree->children[3]))));
+    
+            preds.push_back(pred);
+
+            auto& pred_t = autodiff::get_output<la::cpu::tensor_like<double>>(pred);
+
+            double max = -std::numeric_limits<double>::infinity();
+            int argmax = -1;
+            for (int i = 0; i < pred_t.vec_size(); ++i) {
+                if (pred_t.data()[i] > max) {
+                    argmax = i;
+                    max = pred_t.data()[i];
+                }
+            }
+
+            result.push_back(argmax);
+    
+            // TODO: weak_var necessary?
+            auto input = autodiff::weak_var(autodiff::row_at(
+                tensor_tree::get_var(var_tree->children[2]), argmax),
+                0, std::vector<unsigned int> {1, (unsigned int) cell_dim});
+    
+            input = autodiff::add(
+                autodiff::mul(input, tensor_tree::get_var(var_tree->children[1]->children[0])),
+                tensor_tree::get_var(var_tree->children[1]->children[1]));
+    
+            la::cpu::tensor<double> output_storage_t;
+            output_storage_t.resize({(unsigned int) cell_dim});
+            auto output_storage = comp_graph.var(output_storage_t);
+    
+            lstm::lstm_step_nn_t lstm_step = lstm::make_lstm_step_nn(input, output, cell,
+                tensor_tree::get_var(var_tree->children[1]->children[2]),
+                tensor_tree::get_var(var_tree->children[1]->children[3]),
+                tensor_tree::get_var(var_tree->children[1]->children[4]),
+                tensor_tree::get_var(var_tree->children[1]->children[5]),
+                nullptr,
+                output_storage,
+                1,
+                cell_dim);
+    
+            output = lstm_step.output;
+            cell = lstm_step.cell;
+        }
+
+        return result;
+    }
+
 }
 

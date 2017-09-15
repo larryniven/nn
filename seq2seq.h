@@ -52,6 +52,14 @@ namespace seq2seq {
         std::shared_ptr<tensor_tree::vertex> var_tree,
         attention& att_func);
 
+    std::vector<int> decode(
+        std::vector<std::string> const& id_label,
+        std::shared_ptr<autodiff::op_t> hidden,
+        int nhidden,
+        int cell_dim,
+        std::shared_ptr<tensor_tree::vertex> var_tree,
+        attention& att_func);
+
 }
 
 #endif
