@@ -58,11 +58,19 @@ namespace cnn {
     fc_transcriber::operator()(std::shared_ptr<tensor_tree::vertex> var_tree,
         std::shared_ptr<autodiff::op_t> input)
     {
-        auto& t = autodiff::get_output<la::cpu::tensor<double>>(input);
-        auto v = autodiff::reshape(input, { t.vec_size() });
+        auto& t = autodiff::get_output<la::cpu::tensor_like<double>>(input);
+        std::vector<unsigned int> sizes = t.sizes();
+        unsigned int dim = 1;
+        while (sizes.size() > 1) {
+            dim *= sizes.back();
+            sizes.pop_back();
+        }
+        sizes.push_back(dim);
+        auto v = autodiff::reshape(input, sizes);
 
-        return autodiff::add(autodiff::mul(v, tensor_tree::get_var(var_tree->children[0])),
-            tensor_tree::get_var(var_tree->children[1]));
+        auto z = autodiff::mul(v, tensor_tree::get_var(var_tree->children[0]));
+        auto b = autodiff::rep_row_to(tensor_tree::get_var(var_tree->children[1]), z);
+        return autodiff::add(z, b);
     }
 
     std::shared_ptr<autodiff::op_t>
