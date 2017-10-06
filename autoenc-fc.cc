@@ -1,6 +1,6 @@
 #include "nn/autoenc-fc.h"
 
-namespace nn {
+namespace autoenc {
 
     std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer)
     {
@@ -50,7 +50,7 @@ namespace nn {
         return autodiff::add(z, b);
     }
 
-    std::shared_ptr<autodiff::op_t> make_nn(std::shared_ptr<autodiff::op_t> input,
+    std::shared_ptr<autodiff::op_t> make_wta_nn(std::shared_ptr<autodiff::op_t> input,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         int k)
     {

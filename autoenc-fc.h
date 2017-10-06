@@ -3,7 +3,7 @@
 
 #include "nn/tensor-tree.h"
 
-namespace nn {
+namespace autoenc {
 
     std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer);
 
