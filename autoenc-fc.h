@@ -10,7 +10,7 @@ namespace autoenc {
     std::shared_ptr<autodiff::op_t> make_symmetric_ae(std::shared_ptr<autodiff::op_t> input,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         double input_dropout, double hidden_dropout,
-        std::default_random_engine& gen);
+        std::default_random_engine *gen);
 
     std::shared_ptr<tensor_tree::vertex> make_tensor_tree(int layer);
 
