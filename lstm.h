@@ -53,6 +53,8 @@ namespace lstm {
         std::shared_ptr<autodiff::op_t> mask;
     };
 
+    trans_seq_t make_trans_seq(std::shared_ptr<autodiff::op_t> t);
+
     struct transcriber {
         virtual ~transcriber();
 

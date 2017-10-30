@@ -27,7 +27,8 @@ namespace lstm {
         std::shared_ptr<lstm_tensor_tree_factory> base_fac;
         int layer;
 
-        multilayer_lstm_tensor_tree_factory(std::shared_ptr<lstm_tensor_tree_factory> base_fac, int layer);
+        multilayer_lstm_tensor_tree_factory(
+            std::shared_ptr<lstm_tensor_tree_factory> base_fac, int layer);
 
         virtual std::shared_ptr<tensor_tree::vertex> operator()() const;
 

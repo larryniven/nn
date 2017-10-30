@@ -127,6 +127,25 @@ namespace lstm {
         return result;
     }
 
+    // trans_seq_t
+
+    trans_seq_t make_trans_seq(std::shared_ptr<autodiff::op_t> var)
+    {
+        trans_seq_t result;
+
+        auto& t = autodiff::get_output<la::cpu::tensor_like<double>>(var);
+
+        assert(t.dim() == 3);
+
+        result.nframes = t.size(0);
+        result.batch_size = t.size(1);
+        result.dim = t.size(2);
+        result.feat = var;
+        result.mask = nullptr;
+
+        return result;
+    }
+
     // transcriber
 
     transcriber::~transcriber()
