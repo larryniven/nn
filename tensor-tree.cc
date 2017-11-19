@@ -106,20 +106,7 @@ namespace tensor_tree {
         }
     }
 
-    void imul(std::shared_ptr<vertex> root, double a)
-    {
-        auto order = leaves_pre_order(root);
-
-        for (auto& t: order) {
-            if (t->data == nullptr) {
-                continue;
-            }
-
-            la::cpu::imul(get_data<la::cpu::tensor<double>>(t), a);
-        }
-    }
-
-    void iadd(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2)
+    void axpy(std::shared_ptr<vertex> p1, double d, std::shared_ptr<vertex> p2)
     {
         auto p1_order = leaves_pre_order(p1);
         auto p2_order = leaves_pre_order(p2);
@@ -129,23 +116,8 @@ namespace tensor_tree {
                 continue;
             }
 
-            la::cpu::iadd(get_data<la::cpu::tensor<double>>(p1_order[i]),
-                get_data<la::cpu::tensor<double>>(p2_order[i]));
-        }
-    }
-
-    void isub(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2)
-    {
-        auto p1_order = leaves_pre_order(p1);
-        auto p2_order = leaves_pre_order(p2);
-
-        for (int i = 0; i < p1_order.size(); ++i) {
-            if (p2_order[i]->data == nullptr) {
-                continue;
-            }
-
-            la::cpu::isub(get_data<la::cpu::tensor<double>>(p1_order[i]),
-                get_data<la::cpu::tensor<double>>(p2_order[i]));
+            la::cpu::axpy(get_data<la::cpu::tensor<double>>(p1_order[i]),
+                d, get_data<la::cpu::tensor<double>>(p2_order[i]));
         }
     }
 

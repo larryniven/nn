@@ -36,7 +36,10 @@ namespace nn {
     
     la::cpu::tensor<double> log_loss::grad(double scale)
     {
-        return la::cpu::mul(gold, -scale);
+        la::cpu::tensor<double> result;
+        la::cpu::resize_as(result, gold);
+        la::cpu::axpy(result, -scale, gold);
+        return result;
     }
 
     l2_loss::l2_loss(la::cpu::tensor_like<double> const& gold, la::cpu::tensor_like<double> const& pred)
@@ -48,14 +51,16 @@ namespace nn {
         la::cpu::tensor<double> diff;
         diff.resize(gold.sizes());
         la::cpu::copy(diff, gold);
-        la::cpu::isub(diff, pred);
+        la::cpu::axpy(diff, -1, pred);
 
         return la::cpu::dot(diff, diff);
     }
     
     la::cpu::tensor<double> l2_loss::grad(double scale)
     {
-        la::cpu::tensor<double> g = la::cpu::mul(pred, 2 * scale);
+        la::cpu::tensor<double> g;
+        g.resize(pred.sizes());
+        la::cpu::axpy(g, 2 * scale, pred);
         la::cpu::axpy(g, -2 * scale, gold);
 
         return g;

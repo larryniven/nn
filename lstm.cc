@@ -35,13 +35,13 @@ namespace lstm {
         unsigned int ubatch_size = batch_size;
         unsigned int ucell_dim = cell_dim;
 
-        auto pre_g = autodiff::subtensor(pre_gates, std::vector<int> {0, 0},
+        auto pre_g = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 0},
             std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_i = autodiff::subtensor(pre_gates, std::vector<int> {0, cell_dim},
+        auto pre_i = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, ucell_dim},
             std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_f = autodiff::subtensor(pre_gates, std::vector<int> {0, 2 * cell_dim},
+        auto pre_f = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 2 * ucell_dim},
             std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_o = autodiff::subtensor(pre_gates, std::vector<int> {0, 3 * cell_dim},
+        auto pre_o = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 3 * ucell_dim},
             std::vector<unsigned int> { ubatch_size, ucell_dim });
 
         auto g = autodiff::tanh(pre_g);
@@ -95,11 +95,11 @@ namespace lstm {
         unsigned int ubatch_size = batch_size;
         unsigned int ucell_dim = cell_dim;
 
-        auto pre_g = autodiff::subtensor(pre_gates, std::vector<int> {0, 0},
+        auto pre_g = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 0},
             std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_i = autodiff::subtensor(pre_gates, std::vector<int> {0, cell_dim},
+        auto pre_i = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, ucell_dim},
             std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_o = autodiff::subtensor(pre_gates, std::vector<int> {0, 2 * cell_dim},
+        auto pre_o = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 2 * ucell_dim},
             std::vector<unsigned int> { ubatch_size, ucell_dim });
 
         auto g = autodiff::tanh(pre_g);

@@ -39,9 +39,7 @@ namespace tensor_tree {
 
     void resize_as(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2);
 
-    void imul(std::shared_ptr<vertex> root, double a);
-    void iadd(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2);
-    void isub(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2);
+    void axpy(std::shared_ptr<vertex> p1, double d, std::shared_ptr<vertex> p2);
     void zero(std::shared_ptr<vertex> p);
 
     double norm(std::shared_ptr<vertex> root);
