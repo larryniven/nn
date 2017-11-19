@@ -66,7 +66,7 @@ namespace lstm {
         result.output_gate = autodiff::logistic(
             autodiff::add(pre_o, autodiff::emul(result.cell, cell2o)));
 
-        result.output = autodiff::emul(output_storage,
+        result.output = autodiff::emul_to(output_storage,
             result.output_gate, autodiff::tanh(result.cell));
 
         return result;
@@ -121,7 +121,7 @@ namespace lstm {
         result.output_gate = autodiff::logistic(
             autodiff::add(pre_o, autodiff::mul(result.cell, cell2o)));
 
-        result.output = autodiff::emul(output_storage,
+        result.output = autodiff::emul_to(output_storage,
             result.output_gate, autodiff::tanh(result.cell));
 
         return result;
