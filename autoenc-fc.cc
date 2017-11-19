@@ -16,10 +16,10 @@ namespace autoenc {
     std::shared_ptr<autodiff::op_t> make_symmetric_ae(std::shared_ptr<autodiff::op_t> input,
         std::shared_ptr<tensor_tree::vertex> var_tree,
         double input_dropout, double hidden_dropout,
-        std::default_random_engine& gen)
+        std::default_random_engine *gen)
     {
         if (input_dropout != 0.0) {
-            auto mask = autodiff::dropout_mask(input, input_dropout, gen);
+            auto mask = autodiff::dropout_mask(input, input_dropout, *gen);
             input = autodiff::emul(mask, input);
         }
     
@@ -28,7 +28,7 @@ namespace autoenc {
         auto h = autodiff::relu(autodiff::add(z, b1));
 
         if (hidden_dropout != 0.0) {
-            auto mask = autodiff::dropout_mask(h, hidden_dropout, gen);
+            auto mask = autodiff::dropout_mask(h, hidden_dropout, *gen);
             h = autodiff::emul(mask, h);
         }
     
