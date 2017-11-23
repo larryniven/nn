@@ -17,7 +17,10 @@ namespace nn {
         
         la::gpu::tensor<double> log_loss::grad(double scale)
         {
-            return la::gpu::mul(gold, -scale);
+            la::gpu::tensor<double> result;
+            la::gpu::resize_as(result, gold);
+            la::gpu::axpy(result, -scale, gold);
+            return result;
         }
     }
 }

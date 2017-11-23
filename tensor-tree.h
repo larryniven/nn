@@ -27,6 +27,7 @@ namespace tensor_tree {
     }
 
     la::cpu::tensor<double>& get_tensor(std::shared_ptr<vertex> p);
+    la::tensor_like<double>& get_tensor_like(std::shared_ptr<vertex> p);
     std::shared_ptr<autodiff::op_t> get_var(std::shared_ptr<vertex> p);
 
     std::vector<std::shared_ptr<vertex>> leaves_pre_order(std::shared_ptr<vertex> root);

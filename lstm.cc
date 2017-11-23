@@ -133,7 +133,7 @@ namespace lstm {
     {
         trans_seq_t result;
 
-        auto& t = autodiff::get_output<la::cpu::tensor_like<double>>(var);
+        auto& t = autodiff::get_output<la::tensor_like<double>>(var);
 
         assert(t.dim() == 3);
 
@@ -181,15 +181,10 @@ namespace lstm {
 
         auto& comp_graph = *seq.feat->graph;
 
-        la::cpu::tensor<double> zeros;
-        zeros.resize(std::vector<unsigned int> { ubatch_size, ucell_dim });
+        auto cell = autodiff::zeros(comp_graph, { ubatch_size, ucell_dim });
+        auto output = autodiff::zeros(comp_graph, { ubatch_size, ucell_dim });
 
-        auto cell = comp_graph.var(zeros);
-        auto output = comp_graph.var(zeros);
-
-        zeros.resize(std::vector<unsigned int> { unframes, ubatch_size, ucell_dim });
-
-        auto output_storage = comp_graph.var(zeros);
+        auto output_storage = autodiff::zeros(comp_graph, { unframes, ubatch_size, ucell_dim });
 
         std::vector<std::shared_ptr<autodiff::op_t>> outputs;
 

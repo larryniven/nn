@@ -69,10 +69,10 @@ namespace lstm_frame {
             std::shared_ptr<lstm::transcriber> b_trans;
 
             f_trans = std::make_shared<lstm::lstm_transcriber>(
-                lstm::lstm_transcriber { (int) tensor_tree::get_tensor(param
+                lstm::lstm_transcriber { (int) tensor_tree::get_tensor_like(param
                     ->children[i]->children[0]->children[2]).size(0) });
             b_trans = std::make_shared<lstm::lstm_transcriber>(
-                lstm::lstm_transcriber { (int) tensor_tree::get_tensor(param
+                lstm::lstm_transcriber { (int) tensor_tree::get_tensor_like(param
                     ->children[i]->children[1]->children[2]).size(0), true });
 
             if (dropout != 0.0) {
@@ -88,7 +88,7 @@ namespace lstm_frame {
             }
 
             std::shared_ptr<lstm::transcriber> trans = std::make_shared<lstm::bi_transcriber>(
-                lstm::bi_transcriber { (int) tensor_tree::get_tensor(param
+                lstm::bi_transcriber { (int) tensor_tree::get_tensor_like(param
                     ->children[i]->children[2]).size(1), f_trans, b_trans });
 
             result.layer.push_back(trans);
@@ -118,10 +118,10 @@ namespace lstm_frame {
             std::shared_ptr<lstm::transcriber> b_trans;
 
             f_trans = std::make_shared<lstm::dyer_lstm_transcriber>(
-                lstm::dyer_lstm_transcriber { (int) tensor_tree::get_tensor(param
+                lstm::dyer_lstm_transcriber { (int) tensor_tree::get_tensor_like(param
                     ->children[i]->children[0]->children[2]).size(0) });
             b_trans = std::make_shared<lstm::dyer_lstm_transcriber>(
-                lstm::dyer_lstm_transcriber { (int) tensor_tree::get_tensor(param
+                lstm::dyer_lstm_transcriber { (int) tensor_tree::get_tensor_like(param
                     ->children[i]->children[1]->children[2]).size(0), true });
 
             if (dropout != 0.0) {
@@ -137,7 +137,7 @@ namespace lstm_frame {
             }
 
             std::shared_ptr<lstm::transcriber> trans = std::make_shared<lstm::bi_transcriber>(
-                lstm::bi_transcriber { (int) tensor_tree::get_tensor(param
+                lstm::bi_transcriber { (int) tensor_tree::get_tensor_like(param
                     ->children[i]->children[2]).size(1), f_trans, b_trans });
 
             result.layer.push_back(trans);

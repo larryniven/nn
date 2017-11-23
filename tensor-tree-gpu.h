@@ -21,14 +21,17 @@ namespace tensor_tree {
 
         void resize_as(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2);
 
-        void imul(std::shared_ptr<vertex> root, double a);
-        void iadd(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2);
-        void isub(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2);
+        void axpy(std::shared_ptr<vertex> p1, double a, std::shared_ptr<vertex> p2);
+
         void zero(std::shared_ptr<vertex> p);
 
         double norm(std::shared_ptr<vertex> root);
 
         bool has_nan(std::shared_ptr<vertex> root);
+
+        std::shared_ptr<vertex> deep_copy(std::shared_ptr<vertex> root);
+
+        void print_tree(std::shared_ptr<vertex> root);
 
         void const_step_update(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,
             double step_size);

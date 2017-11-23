@@ -1,6 +1,7 @@
 #include "nn/tensor-tree-gpu.h"
 #include "opt/opt.h"
 #include "opt/opt-gpu.h"
+#include "autodiff/autodiff-gpu.h"
 
 namespace tensor_tree {
 
@@ -33,7 +34,8 @@ namespace tensor_tree {
                 }
 
                 if (t->type == "gpu-tensor") {
-                    t->data = std::make_shared<la::cpu::tensor<double>>(la::gpu::to_host(get_gpu_tensor(t)));
+                    t->data = std::make_shared<la::cpu::tensor<double>>(
+                        la::gpu::to_host(get_gpu_tensor(t)));
                     t->type = "tensor";
                 }
             }
@@ -68,24 +70,7 @@ namespace tensor_tree {
             }
         }
 
-        void imul(std::shared_ptr<vertex> root, double a)
-        {
-            auto order = leaves_pre_order(root);
-
-            for (auto& t: order) {
-                if (t->data == nullptr) {
-                    continue;
-                }
-
-                if (t->type == "tensor") {
-                    la::cpu::imul(get_tensor(t), a);
-                } else if (t->type == "gpu-tensor") {
-                    la::gpu::imul(get_gpu_tensor(t), a);
-                }
-            }
-        }
-
-        void iadd(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2)
+        void axpy(std::shared_ptr<vertex> p1, double d, std::shared_ptr<vertex> p2)
         {
             auto p1_order = leaves_pre_order(p1);
             auto p2_order = leaves_pre_order(p2);
@@ -96,27 +81,9 @@ namespace tensor_tree {
                 }
 
                 if (p1_order[i]->type == "tensor") {
-                    la::cpu::iadd(get_tensor(p1_order[1]), get_tensor(p2_order[i]));
+                    la::cpu::axpy(get_tensor(p1_order[i]), d, get_tensor(p2_order[i]));
                 } else if (p1_order[i]->type == "gpu-tensor") {
-                    la::gpu::iadd(get_gpu_tensor(p1_order[1]), get_gpu_tensor(p2_order[i]));
-                }
-            }
-        }
-
-        void isub(std::shared_ptr<vertex> p1, std::shared_ptr<vertex> p2)
-        {
-            auto p1_order = leaves_pre_order(p1);
-            auto p2_order = leaves_pre_order(p2);
-
-            for (int i = 0; i < p1_order.size(); ++i) {
-                if (p2_order[i]->data == nullptr) {
-                    continue;
-                }
-
-                if (p1_order[i]->type == "tensor") {
-                    la::cpu::isub(get_tensor(p1_order[i]), get_tensor(p2_order[i]));
-                } else if (p1_order[i]->type == "gpu-tensor") {
-                    la::gpu::isub(get_gpu_tensor(p1_order[i]), get_gpu_tensor(p2_order[i]));
+                    la::gpu::axpy(get_gpu_tensor(p1_order[i]), d, get_gpu_tensor(p2_order[i]));
                 }
             }
         }
@@ -180,6 +147,126 @@ namespace tensor_tree {
             }
 
             return false;
+        }
+
+        std::shared_ptr<vertex> deep_copy(std::shared_ptr<vertex> root)
+        {
+            std::unordered_map<std::shared_ptr<vertex>, std::shared_ptr<vertex>> vertex_map;
+
+            std::vector<std::tuple<std::shared_ptr<vertex>, bool>> stack;
+
+            stack.push_back(std::make_tuple(root, false));
+
+            while (stack.size() > 0) {
+                std::shared_ptr<vertex> u;
+                bool finished;
+                std::tie(u, finished) = stack.back();
+                stack.pop_back();
+
+                if (!finished) {
+                    stack.push_back(std::make_tuple(u, true));
+
+                    for (int i = u->children.size() - 1; i >= 0; --i) {
+                        stack.push_back(std::make_tuple(u->children[i], false));
+                    }
+                } else {
+                    std::shared_ptr<vertex> k = std::make_shared<vertex>(vertex {"nil"});
+
+                    if (u->type == "tensor") {
+                        k->name = u->name;
+                        k->type = u->type;
+                        k->data = std::make_shared<la::cpu::tensor<double>>(la::cpu::tensor<double>(get_tensor(u)));
+                    } else if (u->type == "gpu-tensor") {
+                        k->name = u->name;
+                        k->type = u->type;
+                        k->data = std::make_shared<la::gpu::tensor<double>>(la::gpu::tensor<double>(get_gpu_tensor(u)));
+                    }
+
+                    vertex_map[u] = k;
+
+                    for (int i = 0; i < u->children.size(); ++i) {
+                        k->children.push_back(vertex_map.at(u->children[i]));
+                    }
+                }
+            }
+
+            return vertex_map.at(root);
+        }
+
+        void print_tree(std::shared_ptr<vertex> root)
+        {
+            std::vector<std::tuple<std::shared_ptr<vertex>, bool>> stack;
+
+            std::vector<std::shared_ptr<vertex>> path;
+
+            stack.push_back(std::make_tuple(root, false));
+
+            while (stack.size() > 0) {
+                std::shared_ptr<vertex> u;
+                bool finished;
+                std::tie(u, finished) = stack.back();
+                stack.pop_back();
+
+                if (!finished) {
+                    path.push_back(u);
+
+                    stack.push_back(std::make_tuple(u, true));
+
+                    for (int i = u->children.size() - 1; i >= 0; --i) {
+                        stack.push_back(std::make_tuple(u->children[i], false));
+                    }
+
+                    for (int i = 0; i < path.size() - 1; ++i) {
+                        std::cout << "  ";
+                    }
+
+                    std::cout << "name: " << u->name;
+
+                    if (u->type == "tensor") {
+                        std::cout << " type: tensor";
+
+                        if (u->data != nullptr) {
+                            std::cout << " no data";
+                        } else {
+                            std::cout << " sizes: " << get_tensor(u).sizes()
+                                << " norm: " << la::cpu::norm(get_tensor(u));
+                        }
+                    } else if (u->type == "gpu-tensor") {
+                        std::cout << " type: gpu-tensor";
+
+                        if (u->data != nullptr) {
+                            std::cout << " no data";
+                        } else {
+                            std::cout << " sizes: " << get_gpu_tensor(u).sizes()
+                                << " norm: " << la::gpu::norm(get_gpu_tensor(u));
+                        }
+                    } else if (u->type == "autodiff-var") {
+                        std::cout << " type: autodiff var";
+
+                        auto v = get_var(u);
+
+                        if (v->output != nullptr) {
+                            auto& t = autodiff::get_output<la::gpu::tensor_like<double>>(v);
+
+                            std::cout << " output sizes: " << t.sizes()
+                                << " output norm: " << la::gpu::norm(t);
+                        }
+
+                        if (v->grad != nullptr) {
+                            auto& t = autodiff::get_grad<la::gpu::tensor_like<double>>(v);
+
+                            std::cout << " grad sizes: " << t.sizes()
+                                << " grad norm: " << la::gpu::norm(t);
+                        }
+                    } else if (u->type == "nil") {
+                        std::cout << " type: nil";
+                    }
+
+                    std::cout << std::endl;
+                } else {
+                    path.pop_back();
+                }
+            }
         }
 
         void const_step_update(std::shared_ptr<vertex> param, std::shared_ptr<vertex> grad,

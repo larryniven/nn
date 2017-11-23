@@ -5,13 +5,11 @@
 #include <fstream>
 #include <exception>
 
-using namespace std::string_literals;
-
 namespace tensor_tree {
 
     std::shared_ptr<vertex> make_tensor(std::string name)
     {
-        return std::make_shared<vertex>(vertex {"tensor"s, nullptr, {}, name});
+        return std::make_shared<vertex>(vertex {"tensor", nullptr, {}, name});
     }
 
     la::cpu::tensor<double>& get_tensor(std::shared_ptr<vertex> p)
@@ -20,6 +18,15 @@ namespace tensor_tree {
             return get_data<la::cpu::tensor<double>>(p);
         } else {
             throw std::logic_error("expecting tensor");
+        }
+    }
+
+    la::tensor_like<double>& get_tensor_like(std::shared_ptr<vertex> p)
+    {
+        if (p->type == "tensor" || p->type == "gpu-tensor") {
+            return get_data<la::tensor_like<double>>(p);
+        } else {
+            throw std::logic_error("expecting generic tensor");
         }
     }
 
@@ -461,19 +468,33 @@ namespace tensor_tree {
 
                 if (u->type == "tensor") {
                     std::cout << " type: tensor";
+
+                    if (u->data != nullptr) {
+                        std::cout << " no data";
+                    } else {
+                        std::cout << " sizes: " << get_tensor(u).sizes()
+                            << " norm: " << la::cpu::norm(get_tensor(u));
+                    }
                 } else if (u->type == "autodiff-var") {
                     std::cout << " type: autodiff var";
-                    if (get_var(u)->graph != nullptr) {
-                        std::cout << " has graph";
+
+                    auto v = get_var(u);
+
+                    if (v->output != nullptr) {
+                        auto& t = autodiff::get_output<la::cpu::tensor_like<double>>(v);
+
+                        std::cout << " output sizes: " << t.sizes()
+                            << " output norm: " << la::cpu::norm(t);
+                    }
+
+                    if (v->grad != nullptr) {
+                        auto& t = autodiff::get_grad<la::cpu::tensor_like<double>>(v);
+
+                        std::cout << " grad sizes: " << t.sizes()
+                            << " grad norm: " << la::cpu::norm(t);
                     }
                 } else if (u->type == "nil") {
                     std::cout << " type: nil";
-                }
-
-                if (u->data != nullptr) {
-                    std::cout << " sizes: "<< get_tensor(u).sizes();
-                } else {
-                    std::cout << " no data";
                 }
 
                 std::cout << std::endl;

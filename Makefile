@@ -1,4 +1,4 @@
-CXXFLAGS += -std=c++14 -I ../ -L ../ebt -L ../la -L ../autodiff -L ../opt -L ../speech
+CXXFLAGS += -std=c++11 -I ../ -L ../ebt -L ../la -L ../autodiff -L ../opt -L ../speech
 NVCCFLAGS += -std=c++11 -I ../ -L ../ebt -L ../la -L ../autodiff -L ../opt -L ../speech
 AR = gcc-ar
 
