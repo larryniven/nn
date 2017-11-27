@@ -35,14 +35,12 @@ namespace lstm {
         unsigned int ubatch_size = batch_size;
         unsigned int ucell_dim = cell_dim;
 
-        auto pre_g = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 0},
-            std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_i = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, ucell_dim},
-            std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_f = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 2 * ucell_dim},
-            std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_o = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 3 * ucell_dim},
-            std::vector<unsigned int> { ubatch_size, ucell_dim });
+        auto block = autodiff::split_block(pre_gates, 4);
+
+        auto pre_g = autodiff::weak_var(block, 0, {ubatch_size, ucell_dim});
+        auto pre_i = autodiff::weak_var(block, ubatch_size * ucell_dim, {ubatch_size, ucell_dim});
+        auto pre_f = autodiff::weak_var(block, 2 * ubatch_size * ucell_dim, {ubatch_size, ucell_dim});
+        auto pre_o = autodiff::weak_var(block, 3 * ubatch_size * ucell_dim, {ubatch_size, ucell_dim});
 
         auto g = autodiff::tanh(pre_g);
         if (prev_cell == nullptr) {
@@ -95,12 +93,11 @@ namespace lstm {
         unsigned int ubatch_size = batch_size;
         unsigned int ucell_dim = cell_dim;
 
-        auto pre_g = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 0},
-            std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_i = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, ucell_dim},
-            std::vector<unsigned int> { ubatch_size, ucell_dim });
-        auto pre_o = autodiff::subtensor(pre_gates, std::vector<unsigned int> {0, 2 * ucell_dim},
-            std::vector<unsigned int> { ubatch_size, ucell_dim });
+        auto block = autodiff::split_block(pre_gates, 3);
+
+        auto pre_g = autodiff::weak_var(block, 0, {ubatch_size, ucell_dim});
+        auto pre_i = autodiff::weak_var(block, ubatch_size * ucell_dim, {ubatch_size, ucell_dim});
+        auto pre_o = autodiff::weak_var(block, 2 * ubatch_size * ucell_dim, {ubatch_size, ucell_dim});
 
         auto g = autodiff::tanh(pre_g);
         result.input_gate = autodiff::logistic(autodiff::add(pre_i, autodiff::mul(prev_cell, cell2i)));
