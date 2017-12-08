@@ -35,7 +35,13 @@ namespace lstm {
         unsigned int ubatch_size = batch_size;
         unsigned int ucell_dim = cell_dim;
 
-        auto block = autodiff::split_block(pre_gates, 4);
+        std::shared_ptr<autodiff::op_t> block;
+
+        if (batch_size == 1) {
+            block = pre_gates;
+        } else {
+            block = autodiff::split_block(pre_gates, 4);
+        }
 
         auto pre_g = autodiff::weak_var(block, 0, {ubatch_size, ucell_dim});
         auto pre_i = autodiff::weak_var(block, ubatch_size * ucell_dim, {ubatch_size, ucell_dim});
@@ -93,7 +99,13 @@ namespace lstm {
         unsigned int ubatch_size = batch_size;
         unsigned int ucell_dim = cell_dim;
 
-        auto block = autodiff::split_block(pre_gates, 3);
+        std::shared_ptr<autodiff::op_t> block;
+
+        if (batch_size == 1) {
+            block = pre_gates;
+        } else {
+            block = autodiff::split_block(pre_gates, 3);
+        }
 
         auto pre_g = autodiff::weak_var(block, 0, {ubatch_size, ucell_dim});
         auto pre_i = autodiff::weak_var(block, ubatch_size * ucell_dim, {ubatch_size, ucell_dim});
