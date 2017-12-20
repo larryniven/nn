@@ -1,5 +1,5 @@
 #ifndef LSTM_FRAME_H
-#define LSTM_FRAME_h
+#define LSTM_FRAME_H
 
 #include <memory>
 #include "nn/tensor-tree.h"

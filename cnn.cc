@@ -196,6 +196,8 @@ namespace cnn {
 
             result.push_back(autodiff::emul(cell, output_gate[i]));
         }
+
+        return result;
     }
 
     std::vector<std::shared_ptr<autodiff::op_t>> conv_ifo_pooling(
