@@ -58,7 +58,7 @@ namespace lstm {
     struct transcriber {
         virtual ~transcriber();
 
-        virtual bool require_param() const override;
+        virtual bool require_param() const;
 
         virtual trans_seq_t operator()(
             std::shared_ptr<tensor_tree::vertex> var_tree,
